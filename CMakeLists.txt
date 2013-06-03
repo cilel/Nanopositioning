@@ -12,4 +12,4 @@ ENDIF(VISP_FOUND)
 
 #INCLUDE_DIRECTORIES(test)
 
-ADD_EXECUTABLE(Nanopositioning Nanopositioning.cpp npFeatureLuminance.cpp npFeatureLuminance.h npSimulatorSEM.cpp npSimulatorSEM.h)
+ADD_EXECUTABLE(Nanopositioning Nanopositioning.cpp npFeatureLuminance.cpp npFeatureLuminance.h npSimulatorSEM.cpp npSimulatorSEM.h npImageSimulator.cpp npImageSimulator.h)

@@ -159,6 +159,14 @@ public:
 
   //! Compute the error between a visual features and zero
   vpColVector error(const unsigned int select = FEATURE_ALL)  ;
+
+  typedef enum {
+       perspective,
+       parallel,
+       weakperspective
+   }projectionModel;
+
+  projectionModel pjModel;
 } ;
 
 

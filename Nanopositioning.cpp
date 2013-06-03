@@ -25,7 +25,8 @@
 #include "npFeatureLuminance.h"
 #include <visp/vpParseArgv.h>
 
-#include <visp/vpImageSimulator.h>
+//#include <visp/vpImageSimulator.h>
+#include "npImageSimulator.h"
 #include <stdlib.h>
 #define  Z             1
 
@@ -188,15 +189,15 @@ main(int argc, const char ** argv)
   X[3][1] = 0.215;
   X[3][2] = 0;
 
-  vpImageSimulator sim;
+  npImageSimulator sim;
 
-  sim.setInterpolationType(vpImageSimulator::BILINEAR_INTERPOLATION) ;
-  sim.init(Itexture, X);
+  sim.setInterpolationType(npImageSimulator::BILINEAR_INTERPOLATION) ;
+  sim.init(Itexture, X, npImageSimulator::parallel);
 
 
 
   
-  vpCameraParameters cam(870, 870, 160, 120);
+  vpCameraParameters cam(870, 870, 120, 160);
 
   // ----------------------------------------------------------
   // Create the framegraber (here a simulated image)
@@ -248,7 +249,7 @@ main(int argc, const char ** argv)
 
   cout << "cMw=\n" << cMw << endl;
 
-  wMe.buildFrom(0,0,0.1,vpMath::rad(5),vpMath::rad(-10),vpMath::rad(5));
+  wMe.buildFrom(0,0,-0.2,vpMath::rad(10),vpMath::rad(-10),vpMath::rad(5));
 
   cout  << "wMe=\n" << wMe << endl;
 
@@ -385,8 +386,10 @@ main(int argc, const char ** argv)
   // ----------------------------------------------------------
   int iter   = 0;
   int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
+
+
   
-  double normeError = 100000;
+  double normeError = 1000;
   do
   {
 

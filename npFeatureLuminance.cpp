@@ -148,13 +148,12 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 	  //   cout << i << endl ;
 	  for (unsigned int j = bord ; j < nbc-bord; j++)
 	    {	double x=0,y=0;
-	      vpPixelMeterConversion::convertPoint(cam,
+          vpPixelMeterConversion::convertPointWithoutDistortion(cam,
 						   i, j,
 						   y, x)  ;
 	    
 	      pixInfo[l].x = x;
 	      pixInfo[l].y = y;
-
 	      pixInfo[l].Z   = Z ;
 
 	      l++;
