@@ -197,7 +197,7 @@ main(int argc, const char ** argv)
 
 
   
-  vpCameraParameters cam(870, 870, 120, 160);
+  vpCameraParameters cam(870, 870, 160, 120);
 
   // ----------------------------------------------------------
   // Create the framegraber (here a simulated image)
@@ -249,7 +249,7 @@ main(int argc, const char ** argv)
 
   cout << "cMw=\n" << cMw << endl;
 
-  wMe.buildFrom(0,0,-0.2,vpMath::rad(10),vpMath::rad(-10),vpMath::rad(5));
+  wMe.buildFrom(0,0,-0.1,vpMath::rad(10),vpMath::rad(-10),vpMath::rad(5));
 
   cout  << "wMe=\n" << wMe << endl;
 
@@ -376,8 +376,8 @@ main(int argc, const char ** argv)
 
 
   mu       =  0.01;
-  lambda   = 30 ;
-  lambdaGN = 30;
+  lambda   = 10 ;
+  lambdaGN = 10;
 
 
   // set a velocity control mode 
@@ -459,7 +459,7 @@ main(int argc, const char ** argv)
     // send the robot velocity
     robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
 
-
+    vpTime::wait(20) ;
   }
   while(normeError > 0.5 && iter < opt_niter);
 
