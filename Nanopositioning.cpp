@@ -1,5 +1,8 @@
 /****************************************************************************/
 
+// The main fonction of Nanopositioning
+
+/****************************************************************************/
 //#include <math.h>
 
 #include <visp/vpDebug.h>
@@ -32,6 +35,7 @@
 
 #include <visp/vpParseArgv.h>
 #include <visp/vpIoTools.h>
+#include <visp/vpPlot.h>
 
 // List of allowed command line options
 #define GETOPTARGS	"cdi:n:h"
@@ -249,7 +253,7 @@ main(int argc, const char ** argv)
 
   cout << "cMw=\n" << cMw << endl;
 
-  wMe.buildFrom(0,0,-0.1,vpMath::rad(10),vpMath::rad(-10),vpMath::rad(5));
+  wMe.buildFrom(0,0,-0.10,vpMath::rad(5),vpMath::rad(5),vpMath::rad(5));
 
   cout  << "wMe=\n" << wMe << endl;
 
@@ -387,9 +391,30 @@ main(int argc, const char ** argv)
   int iter   = 0;
   int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
 
+  vpPlot graphy(2, 600, 400, 100, 300, "Nanopositioning");
+  graphy.initGraph(0,1);
+  graphy.initGraph(1,6);
+  graphy.setColor(0,0,vpColor::red);
+  //graphy.setColor(1,0,vpColor::blue);
+
+  char legend[40];
+  strncpy( legend, "Norm Error", 40 );
+  graphy.setLegend(0,0,legend);
+  strncpy( legend, "Vx", 40 );
+  graphy.setLegend(1,0,legend);
+  strncpy( legend, "Vy", 40 );
+  graphy.setLegend(1,1,legend);
+  strncpy( legend, "Vz", 40 );
+  graphy.setLegend(1,2,legend);
+  strncpy( legend, "Dx", 40 );
+  graphy.setLegend(1,3,legend);
+  strncpy( legend, "Dy", 40 );
+  graphy.setLegend(1,4,legend);
+  strncpy( legend, "Dz", 40 );
+  graphy.setLegend(1,5,legend);
 
   
-  double normeError = 1000;
+  double normError = 1000;
   do
   {
 
@@ -429,9 +454,11 @@ main(int argc, const char ** argv)
     // compute current error
     sI.error(sId,error) ;
 
-    normeError = sqrt(error.sumSquare()/error.getRows());
+    normError = sqrt(error.sumSquare()/error.getRows());
 
-    std::cout << "|e| "<< normeError <<std::endl ;
+    graphy.plot(0,0,iter,normError);
+
+    std::cout << "|e| "<< normError <<std::endl ;
 
     // double t = vpTime::measureTimeMs() ;
 
@@ -451,6 +478,11 @@ main(int argc, const char ** argv)
       e = H * Js.t() *error ;
 
       v =  -lambda*e;
+
+      for(int i=0;i<3;i++)
+        graphy.plot(1,i,iter,v[i]*100);
+      for(int i=3;i<6;i++)
+        graphy.plot(1,i,iter,v[i]);
     }
 
     std::cout << "lambda = " << lambda << "  mu = " << mu ;
@@ -461,7 +493,9 @@ main(int argc, const char ** argv)
 
     vpTime::wait(20) ;
   }
-  while(normeError > 0.5 && iter < opt_niter);
+  while(normError > 0.5 && iter < opt_niter);
+
+  vpDisplay::getClick(graphy.I);
 
   v = 0 ;
   robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
