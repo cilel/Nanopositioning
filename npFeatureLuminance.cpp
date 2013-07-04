@@ -265,7 +265,7 @@ npFeatureLuminance::interaction(vpMatrix &L)
           }
       }
   }
-        cout << "L=" << L << endl;
+        //cout << "L=" << L << endl;
 }
 
 /*!

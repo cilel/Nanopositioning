@@ -37,8 +37,10 @@
 #include <visp/vpIoTools.h>
 #include <visp/vpPlot.h>
 
+#include <visp/vpNoise.h>
+
 // List of allowed command line options
-#define GETOPTARGS	"cdi:n:hp:"
+#define GETOPTARGS	"cdi:n:hp:b"
 using namespace std;
 
 typedef enum {
@@ -104,10 +106,10 @@ OPTIONS:                                               Default\n\
 
 */
 bool getOptions(int argc, const char **argv, std::string &ipath,
-                bool &click_allowed, bool &display, int &niter)
+                bool &click_allowed, bool &display, int &niter, bool &add_noise)
 {
   const char *optarg;
-  int	c;
+  int c;
   while ((c = vpParseArgv::parse(argc, argv, GETOPTARGS, &optarg)) > 1) {
 
     switch (c) {
@@ -115,6 +117,7 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
     case 'd': display = false; break;
     case 'i': ipath = optarg; break; 
     case 'n': niter = atoi(optarg); break;
+    case 'b': add_noise = true;  break;
     case 'p':
         if(!strcmp( optarg, "PERS" ))
             pjModel = perspective;
@@ -152,7 +155,10 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 200;
+  int opt_niter = 300;
+  bool add_noise = false;
+  double noise_mean =0;
+  double noise_sdv = 20;
   
 
   ipath = "../Images/test.jpg";
@@ -160,7 +166,7 @@ main(int argc, const char ** argv)
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
-                 opt_display, opt_niter) == false) {
+                 opt_display, opt_niter,add_noise) == false) {
     return (-1);
   }
 
@@ -181,10 +187,31 @@ main(int argc, const char ** argv)
     exit(-1);
   }
 
-  vpImage<unsigned char> Itexture ;
+  vpImage<unsigned char> Itexture;
   filename = ipath;
-  cout<< filename << endl;
   vpImageIo::read(Itexture,filename) ;
+  vpImage<unsigned char> Inoised;
+  Inoised = Itexture;
+
+//  Inoised.init(Itexture.getRows(),Itexture.getCols(),0);
+  if (add_noise)
+  {
+       vpGaussRand noise(noise_sdv, noise_mean);
+       for(int i=0; i< Itexture.getRows(); i++)
+           for(int j=0;j<Itexture.getCols();j++)
+           {
+               double gauss = noise();
+               double noised =(double) Itexture[i][j] + gauss;
+               if (noised < 0)
+                   Inoised[i][j] = 0;
+               else if (noised > 255)
+                   Inoised[i][j] = 255;
+               else
+                   Inoised[i][j] = noised;
+           }
+
+  }
+
 
   vpColVector X[4];
   for (int i = 0; i < 4; i++) X[i].resize(3);
@@ -211,9 +238,7 @@ main(int argc, const char ** argv)
   npImageSimulator sim;
 
   sim.setInterpolationType(npImageSimulator::BILINEAR_INTERPOLATION) ;
-  sim.init(Itexture, X, npImageSimulator::parallel);
-
-
+  sim.init(Inoised, X, npImageSimulator::parallel);
 
   
   vpCameraParameters cam(870, 870, 160, 120);
