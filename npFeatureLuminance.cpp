@@ -10,6 +10,7 @@
 
 #include "npFeatureLuminance.h"
 
+using namespace std;
 
 /*!
   \file vpFeatureLuminance.cpp
@@ -43,7 +44,7 @@ npFeatureLuminance::init()
 
 
 void
-npFeatureLuminance::init(unsigned int _nbr, unsigned int _nbc, double _Z)
+npFeatureLuminance::init(unsigned int _nbr, unsigned int _nbc, double _Z, projectionModel projModel)
 {
   init() ;
 
@@ -65,6 +66,7 @@ npFeatureLuminance::init(unsigned int _nbr, unsigned int _nbc, double _Z)
   pixInfo = new vpLuminance[dim_s] ;
   
   Z = _Z ;
+  pjModel = projModel;
 }
 
 /*! 
@@ -195,28 +197,75 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 void
 npFeatureLuminance::interaction(vpMatrix &L)
 {
-  double x,y,Ix,Iy,Zinv;
+  double x,y,Ix,Iy,z,Zinv;
 
   L.resize(dim_s,6) ;
 
-  for(unsigned int m = 0; m< L.getRows(); m++)
-    {
-      Ix = pixInfo[m].Ix;
-      Iy = pixInfo[m].Iy;
 
-      x = pixInfo[m].x ;
-      y = pixInfo[m].y ;
-      Zinv =  1 / pixInfo[m].Z;
-
+  if(pjModel==perspective)
+  {
+      for(unsigned int m = 0; m< L.getRows(); m++)
       {
-        L[m][0] = Ix * Zinv;
-        L[m][1] = Iy * Zinv;
-        L[m][2] = -(x*Ix+y*Iy)*Zinv;
-        L[m][3] = -Ix*x*y-(1+y*y)*Iy;
-        L[m][4] = (1+x*x)*Ix + Iy*x*y;
-        L[m][5]  = Iy*x-Ix*y;
+          Ix = pixInfo[m].Ix;
+          Iy = pixInfo[m].Iy;
+
+          x = pixInfo[m].x ;
+          y = pixInfo[m].y ;
+          Zinv =  1 / pixInfo[m].Z;
+
+          {
+            L[m][0] = Ix * Zinv;
+            L[m][1] = Iy * Zinv;
+            L[m][2] = -(x*Ix+y*Iy)*Zinv;
+            L[m][3] = -Ix*x*y-(1+y*y)*Iy;
+            L[m][4] = (1+x*x)*Ix + Iy*x*y;
+            L[m][5]  = Iy*x-Ix*y;
+          }
+      }
+  }
+  else if(pjModel==parallel)
+  {
+      for(unsigned int m = 0; m< L.getRows(); m++)
+      {
+          Ix = pixInfo[m].Ix;
+          Iy = pixInfo[m].Iy;
+
+          x = pixInfo[m].x ;
+          y = pixInfo[m].y ;
+          z = pixInfo[m].Z;
+
+          {
+            L[m][0] = Ix;
+            L[m][1] = Iy ;
+            L[m][2] = 0;
+            L[m][3] = Iy * z;
+            L[m][4] = Ix * z;
+            L[m][5]  = Iy*x-Ix*y;
+          }
       }
     }
+  else
+  {
+      for(unsigned int m = 0; m< L.getRows(); m++)
+      {
+          Ix = pixInfo[m].Ix;
+          Iy = pixInfo[m].Iy;
+
+          x = pixInfo[m].x ;
+          y = pixInfo[m].y ;
+          Zinv =  1 / pixInfo[m].Z;
+
+          {
+            L[m][0] = Ix * Zinv;
+            L[m][1] = Iy * Zinv;
+            L[m][2] = -(x*Ix+y*Iy)*Zinv;
+            L[m][3] = -Ix*x*y-(1+y*y)*Iy;
+            L[m][4] = (1+x*x)*Ix + Iy*x*y;
+            L[m][5]  = Iy*x-Ix*y;
+          }
+      }
+  }
+        cout << "L=" << L << endl;
 }
 
 /*!

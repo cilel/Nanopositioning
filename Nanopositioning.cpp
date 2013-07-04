@@ -38,8 +38,16 @@
 #include <visp/vpPlot.h>
 
 // List of allowed command line options
-#define GETOPTARGS	"cdi:n:h"
+#define GETOPTARGS	"cdi:n:hp:"
 using namespace std;
+
+typedef enum {
+     perspective,
+     parallel,
+     weakperspective
+ }projectionModel;
+
+projectionModel pjModel;
 
 /*!
 
@@ -105,10 +113,17 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
     switch (c) {
     case 'c': click_allowed = false; break;
     case 'd': display = false; break;
-    case 'i': ipath = optarg; break;
+    case 'i': ipath = optarg; break; 
     case 'n': niter = atoi(optarg); break;
+    case 'p':
+        if(!strcmp( optarg, "PERS" ))
+            pjModel = perspective;
+        else if (!strcmp( optarg,"PARA" ))
+            pjModel = parallel;
+        else
+            pjModel = perspective;
+        break;
     case 'h': usage(argv[0], NULL, ipath, niter); return false; break;
-
     default:
       usage(argv[0], optarg, ipath, niter);
       return false; break;
@@ -312,15 +327,23 @@ main(int argc, const char ** argv)
 
   // current visual feature built from the image 
   // (actually, this is the image...)
+
+
   npFeatureLuminance sI ;
-  sI.init( I.getHeight(), I.getWidth(), Z) ;
+  if(pjModel == parallel)
+    sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallel) ;
+  else
+    sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
   sI.setCameraParameters(cam) ;
   sI.buildFrom(I) ;
   
 
   // desired visual feature built from the image 
   npFeatureLuminance sId ;
-  sId.init(I.getHeight(), I.getWidth(),  Z) ;
+  if(pjModel == parallel)
+    sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallel) ;
+  else
+    sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
   sId.setCameraParameters(cam) ;
   sId.buildFrom(Id) ;
 

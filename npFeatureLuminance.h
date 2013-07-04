@@ -47,6 +47,7 @@
 #include <visp/vpImage.h>
 
 
+
 /*!
   \file vpFeatureLuminance.h
   \brief Class that defines the image luminance visual feature
@@ -110,10 +111,19 @@ class VISP_EXPORT npFeatureLuminance : public vpBasicFeature
  public:
   void buildFrom(vpImage<unsigned char> &I) ;
 
+
+
 public: 
+  typedef enum {
+       perspective,
+       parallel,
+       weakperspective
+   }projectionModel;
+
+  projectionModel pjModel;
 
   void init() ;
-  void init(unsigned int _nbr, unsigned int _nbc, double _Z) ;
+  void init(unsigned int _nbr, unsigned int _nbc, double _Z, projectionModel projModel) ;
 
   npFeatureLuminance() ;
  
@@ -160,13 +170,7 @@ public:
   //! Compute the error between a visual features and zero
   vpColVector error(const unsigned int select = FEATURE_ALL)  ;
 
-  typedef enum {
-       perspective,
-       parallel,
-       weakperspective
-   }projectionModel;
 
-  projectionModel pjModel;
 } ;
 
 
