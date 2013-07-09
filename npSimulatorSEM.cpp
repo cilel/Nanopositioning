@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * This is a robot.
+ * This is a simulated platform in a SEM.
  *****************************************************************************/
 
 
@@ -14,7 +14,7 @@
 #include <visp/vpHomogeneousMatrix.h>
 #include <visp/vpRobotException.h>
 //#include <visp/vpSimulatorCamera.h>
-#include "npSimulatorSEM.h"
+//#include "npSimulatorSEM.h"
 
 /*!
   Default constructor that sets the transformation between

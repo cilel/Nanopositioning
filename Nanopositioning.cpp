@@ -31,16 +31,19 @@
 //#include <visp/vpImageSimulator.h>
 #include "npImageSimulator.h"
 #include <stdlib.h>
-#define  Z             1
 
 #include <visp/vpParseArgv.h>
 #include <visp/vpIoTools.h>
 #include <visp/vpPlot.h>
 
 #include <visp/vpNoise.h>
+#include <visp/vpExponentialMap.h>
 
 // List of allowed command line options
 #define GETOPTARGS	"cdi:n:hp:b"
+
+#define  Z             1
+
 using namespace std;
 
 typedef enum {
@@ -50,6 +53,14 @@ typedef enum {
  }projectionModel;
 
 projectionModel pjModel;
+
+typedef enum {
+     Gauss_statistic,// gauss noise
+     Gauss_dynamic // gauss noise in real time
+
+ }noiseModel;
+
+noiseModel nsModel;
 
 /*!
 
@@ -81,12 +92,17 @@ OPTIONS:                                               Default\n\
   -d \n\
      Turn off the display.\n\
 \n\
+  -b\n\
+     Add gauss noise to image.\n\
+\n\
   -n %%d                                               %d\n\
      Number of iterations.\n\
 \n\
   -h\n\
      Print the help.\n",
-	  ipath.c_str(), niter);
+      ipath.c_str(), niter);
+
+
 
   if (badparam)
     fprintf(stdout, "\nERROR: Bad parameter [%s]\n", badparam);
@@ -155,13 +171,14 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 300;
+  int opt_niter = 1000;
   bool add_noise = false;
   double noise_mean =0;
-  double noise_sdv = 20;
+  double noise_sdv = 10;
+  nsModel = Gauss_dynamic;
   
 
-  ipath = "../Images/test.jpg";
+  ipath = "../Images/london.jpg";
 
 
   // Read the command line options
@@ -190,11 +207,12 @@ main(int argc, const char ** argv)
   vpImage<unsigned char> Itexture;
   filename = ipath;
   vpImageIo::read(Itexture,filename) ;
+
   vpImage<unsigned char> Inoised;
   Inoised = Itexture;
 
 //  Inoised.init(Itexture.getRows(),Itexture.getCols(),0);
-  if (add_noise)
+  if (add_noise && (nsModel == Gauss_statistic))
   {
        vpGaussRand noise(noise_sdv, noise_mean);
        for(int i=0; i< Itexture.getRows(); i++)
@@ -209,9 +227,7 @@ main(int argc, const char ** argv)
                else
                    Inoised[i][j] = noised;
            }
-
   }
-
 
   vpColVector X[4];
   for (int i = 0; i < 4; i++) X[i].resize(3);
@@ -238,7 +254,11 @@ main(int argc, const char ** argv)
   npImageSimulator sim;
 
   sim.setInterpolationType(npImageSimulator::BILINEAR_INTERPOLATION) ;
-  sim.init(Inoised, X, npImageSimulator::parallel);
+
+  if(pjModel==parallel)
+    sim.init(Inoised, X, npImageSimulator::parallel);
+  else
+    sim.init(Inoised, X, npImageSimulator::perspective);
 
   
   vpCameraParameters cam(870, 870, 160, 120);
@@ -285,7 +305,7 @@ main(int argc, const char ** argv)
   // ----------------------------------------------------------
 
   //camera desired position
-  vpHomogeneousMatrix cMo,eMo,wMe,cMw ;
+  vpHomogeneousMatrix cMo,eMo,wMe,cMw;
 
   eMo.setIdentity();
 
@@ -293,7 +313,8 @@ main(int argc, const char ** argv)
 
   cout << "cMw=\n" << cMw << endl;
 
-  wMe.buildFrom(0,0,-0.10,vpMath::rad(5),vpMath::rad(5),vpMath::rad(5));
+  wMe.buildFrom(0.0,0.0,0.01,vpMath::rad(0),vpMath::rad(0),vpMath::rad(0));
+//  wMe.buildFrom(0.,0.,0.01,0,0,0);
 
   cout  << "wMe=\n" << wMe << endl;
 
@@ -341,9 +362,9 @@ main(int argc, const char ** argv)
   }
 #endif
   // create the robot (here a simulated free flying camera)
-  npSimulatorSEM robot ;
+ /* npSimulatorSEM robot ;
   robot.setSamplingTime(0.04);
-  robot.setPosition(wMe) ;
+  robot.setPosition(wMe) ;*/
 
   // ------------------------------------------------------
   // Visual feature, interaction matrix, error
@@ -371,8 +392,6 @@ main(int argc, const char ** argv)
     sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
   sId.setCameraParameters(cam) ;
   sId.buildFrom(Id) ;
-
-
   
   // Matrice d'interaction, Hessien, erreur,...
   vpMatrix Lsd;   // matrice d'interaction a la position desiree
@@ -385,6 +404,8 @@ main(int argc, const char ** argv)
 
   // here it is computed at the desired position
   sId.interaction(Lsd) ;
+  cout << "Size of Lsd:" << Lsd.getRows() << "x" << Lsd.getCols() <<endl;
+  //cout << "Lsd=\n" << Lsd <<endl;
 
   vpVelocityTwistMatrix cVw;
   cVw.buildFrom(cMw);
@@ -392,24 +413,65 @@ main(int argc, const char ** argv)
 
   vpMatrix Js;
   vpMatrix Jn;
-  Jn.resize(6,6);
-  Jn.setIdentity();
+  vpMatrix diagHsd;
 
-  Js=-Lsd*cVw*Jn;
+ if(pjModel==parallel)
+  {
+      Jn.resize(6,5);
+      Jn[0][0]=1;
+      Jn[1][1]=1;
+      Jn[3][2]=1;
+      Jn[4][3]=1;
+      Jn[5][4]=1;
 
-  cout << "Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
+      Js=-Lsd*cVw*Jn;
 
-  //cout << "Js=" << Js <<endl;
-  
-  // Compute the Hessian H = L^TL
-  Hsd = Js.AtA() ;
+      //cout << "Lsd*cVw=\n" << Lsd*cVw << endl;
 
-  // Compute the Hessian diagonal for the Levenberg-Marquartd 
-  // optimization process
-  unsigned int n = 6 ;
-  vpMatrix diagHsd(n,n) ;
-  diagHsd.eye(n);
-  for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
+      //cout << "Jn=\n" << Jn << endl;
+      cout << "Size of Jn:" << Jn.getRows() << "x" << Jn.getCols() <<endl;
+
+      //cout << "Js=\n" << Js <<endl;
+      cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
+
+
+      // Compute the Hessian H = L^TL
+      Hsd = Js.AtA() ;
+
+      cout << "Hsd=\n" << Hsd <<endl;
+
+      // Compute the Hessian diagonal for the Levenberg-Marquartd
+      // optimization process
+      unsigned int n = 5 ;
+      diagHsd.resize(n,n) ;
+      diagHsd.eye(n);
+      for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
+  }
+  else //perspective
+  {
+      Jn.resize(6,6);
+      Jn.setIdentity();
+
+
+      Js=-Lsd*cVw*Jn;
+
+      cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
+
+      //cout << "Js=\n" << Js <<endl;
+
+      // Compute the Hessian H = L^TL
+      Hsd = Js.AtA() ;
+
+      cout << "Hsd=\n" << Hsd <<endl;
+
+      // Compute the Hessian diagonal for the Levenberg-Marquartd
+      // optimization process
+      unsigned int n = 6 ;
+      diagHsd.resize(n,n) ;
+      diagHsd.eye(n);
+      for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
+  }
+
 
 
 
@@ -433,36 +495,60 @@ main(int argc, const char ** argv)
 
 
   // set a velocity control mode 
-  robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL) ;
+  //robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL) ;
 
   // ----------------------------------------------------------
   int iter   = 0;
   int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
 
-  vpPlot graphy(2, 600, 400, 100, 300, "Nanopositioning");
+  vpPlot graphy(3, 600, 800, 20, 300, "Nanopositioning");
   graphy.initGraph(0,1);
   graphy.initGraph(1,6);
+  graphy.initGraph(2,6);
   graphy.setColor(0,0,vpColor::red);
+  graphy.setTitle(0,"Error");
+  graphy.setTitle(1,"Velocity: cm/s & rad/s");
+  graphy.setTitle(2,"cdRc: m & rad");
   //graphy.setColor(1,0,vpColor::blue);
 
   char legend[40];
   strncpy( legend, "Norm Error", 40 );
   graphy.setLegend(0,0,legend);
-  strncpy( legend, "Vx", 40 );
+  strncpy( legend, "Tx", 40 );
   graphy.setLegend(1,0,legend);
-  strncpy( legend, "Vy", 40 );
+  strncpy( legend, "Ty", 40 );
   graphy.setLegend(1,1,legend);
-  strncpy( legend, "Vz", 40 );
+  strncpy( legend, "Tz", 40 );
   graphy.setLegend(1,2,legend);
-  strncpy( legend, "Dx", 40 );
+  strncpy( legend, "Rx", 40 );
   graphy.setLegend(1,3,legend);
-  strncpy( legend, "Dy", 40 );
+  strncpy( legend, "Ry", 40 );
   graphy.setLegend(1,4,legend);
-  strncpy( legend, "Dz", 40 );
+  strncpy( legend, "Rz", 40 );
   graphy.setLegend(1,5,legend);
+  strncpy( legend, "Tx", 40 );
+
+  graphy.setLegend(2,0,legend);
+  strncpy( legend, "Ty", 40 );
+  graphy.setLegend(2,1,legend);
+  strncpy( legend, "Tz", 40 );
+  graphy.setLegend(2,2,legend);
+  strncpy( legend, "Rx", 40 );
+  graphy.setLegend(2,3,legend);
+  strncpy( legend, "Ry", 40 );
+  graphy.setLegend(2,4,legend);
+  strncpy( legend, "Rz", 40 );
+  graphy.setLegend(2,5,legend);
 
   
   double normError = 1000;
+  double threshold=0.5;
+  if(add_noise && (nsModel == Gauss_dynamic))
+      threshold += noise_sdv;
+
+  vpHomogeneousMatrix edMe,edMw ;
+  edMw.buildFrom(0,0,0,0,0,0);
+
   do
   {
 
@@ -470,7 +556,7 @@ main(int argc, const char ** argv)
 
     // get the robot end-effector position
 
-    robot.getPosition(wMe) ;
+    //robot.getPosition(wMe) ;
 
     cout << "wMe(" << iter << ")=\n" <<wMe<< endl;
 
@@ -482,14 +568,50 @@ main(int argc, const char ** argv)
 
     cout << "cMo(" << iter << ")=\n" <<cMo<< endl;
 
+    edMe = edMw * wMe;
+
+    cout << "edMe=\n" << edMe << endl;
+
+    vpTranslationVector TedMe;
+    edMe.extract(TedMe);
+    vpThetaUVector RedMe;
+    edMe.extract(RedMe);
+
+    for(int i=0;i<3;i++)
+        graphy.plot(2,i,iter,TedMe[i]);
+    for(int i=0;i<3;i++)
+        graphy.plot(2,i+3,iter,RedMe[i]);
+    //cout << "TedMe=\n" << TedMe << endl;
+    //cout << "RedMe=\n" << RedMe << endl;
+
     sim.getImage(I,cam) ;
+
+    Inoised = I;
+    if (add_noise && nsModel == Gauss_dynamic)
+    {
+         vpGaussRand noise(noise_sdv, noise_mean);
+         for(int i=0; i< I.getRows(); i++)
+             for(int j=0;j<I.getCols();j++)
+             {
+                 double gauss = noise();
+                 double noised =(double) I[i][j] + gauss;
+                 if (noised < 0)
+                     Inoised[i][j] = 0;
+                 else if (noised > 255)
+                     Inoised[i][j] = 255;
+                 else
+                     Inoised[i][j] = noised;
+             }
+    }
+
+
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
     if (opt_display) {
-      vpDisplay::display(I) ;
-      vpDisplay::flush(I) ;
+      vpDisplay::display(Inoised) ;
+      vpDisplay::flush(Inoised) ;
     }
 #endif
-    vpImageTools::imageDifference(I,Id,Idiff) ;
+    vpImageTools::imageDifference(Inoised,Id,Idiff) ;
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
     if (opt_display) {
       vpDisplay::display(Idiff) ;
@@ -497,7 +619,7 @@ main(int argc, const char ** argv)
     }
 #endif
     // Compute current visual feature
-    sI.buildFrom(I) ;
+    sI.buildFrom(Inoised) ;
 
     // compute current error
     sI.error(sId,error) ;
@@ -506,7 +628,7 @@ main(int argc, const char ** argv)
 
     graphy.plot(0,0,iter,normError);
 
-    std::cout << "|e| "<< normError <<std::endl ;
+    cout << "|e| "<< normError <<endl ;
 
     // double t = vpTime::measureTimeMs() ;
 
@@ -537,16 +659,19 @@ main(int argc, const char ** argv)
     std::cout << " |Tc| = " << sqrt(v.sumSquare()) << std::endl;
 
     // send the robot velocity
-    robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
+    //robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
 
-    vpTime::wait(20) ;
+    wMe = wMe * vpExponentialMap::direct(v,0.04);
+
+    vpTime::wait(20);
+
   }
-  while(normError > 0.5 && iter < opt_niter);
+  while(normError > threshold  && iter < opt_niter);
 
   vpDisplay::getClick(graphy.I);
 
-  v = 0 ;
-  robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
+ /* v = 0 ;
+  robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;*/
 
 }
 

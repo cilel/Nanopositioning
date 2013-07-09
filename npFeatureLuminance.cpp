@@ -1,4 +1,7 @@
-
+/****************************************************************************
+ *
+ * Feature Luminance by perspective and parallel projection.
+ *****************************************************************************/
 
 #include <visp/vpMatrix.h>
 #include <visp/vpHomogeneousMatrix.h>
@@ -199,11 +202,12 @@ npFeatureLuminance::interaction(vpMatrix &L)
 {
   double x,y,Ix,Iy,z,Zinv;
 
-  L.resize(dim_s,6) ;
+
 
 
   if(pjModel==perspective)
   {
+        L.resize(dim_s,6) ;
       for(unsigned int m = 0; m< L.getRows(); m++)
       {
           Ix = pixInfo[m].Ix;
@@ -225,6 +229,7 @@ npFeatureLuminance::interaction(vpMatrix &L)
   }
   else if(pjModel==parallel)
   {
+        L.resize(dim_s,6) ;
       for(unsigned int m = 0; m< L.getRows(); m++)
       {
           Ix = pixInfo[m].Ix;
@@ -237,8 +242,12 @@ npFeatureLuminance::interaction(vpMatrix &L)
           {
             L[m][0] = Ix;
             L[m][1] = Iy ;
+            /*L[m][2] = -Iy * z;
+            L[m][3] = Ix * z;
+            L[m][4]  = Iy*x-Ix*y;*/
+
             L[m][2] = 0;
-            L[m][3] = Iy * z;
+            L[m][3] = -Iy * z;
             L[m][4] = Ix * z;
             L[m][5]  = Iy*x-Ix*y;
           }
@@ -246,6 +255,7 @@ npFeatureLuminance::interaction(vpMatrix &L)
     }
   else
   {
+        L.resize(dim_s,6) ;
       for(unsigned int m = 0; m< L.getRows(); m++)
       {
           Ix = pixInfo[m].Ix;
