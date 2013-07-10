@@ -171,11 +171,12 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 1000;
+  int opt_niter = 300;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 10;
   nsModel = Gauss_dynamic;
+  double ZcMo = 0.5;
   
 
   ipath = "../Images/london.jpg";
@@ -269,11 +270,11 @@ main(int argc, const char ** argv)
   vpImage<unsigned char> Id ;
 
   //camera desired position
-  vpHomogeneousMatrix cdMo ;
-  cdMo[2][3] = 1 ;
+  vpHomogeneousMatrix cMod ;
+  cMod[2][3] = ZcMo;
 
   //set the robot at the desired position
-  sim.setCameraPosition(cdMo) ;
+  sim.setCameraPosition(cMod) ;
   sim.getImage(I,cam);  // and aquire the image I-> Id
   Id = I ;
 
@@ -305,7 +306,10 @@ main(int argc, const char ** argv)
   // ----------------------------------------------------------
 
   //camera desired position
-  vpHomogeneousMatrix cMo,eMo,wMe,cMw;
+
+  vpHomogeneousMatrix cMo;
+
+/*  vpHomogeneousMatrix cMo,eMo,wMe,cMw;
 
   eMo.setIdentity();
 
@@ -313,18 +317,20 @@ main(int argc, const char ** argv)
 
   cout << "cMw=\n" << cMw << endl;
 
-  wMe.buildFrom(0.0,0.0,0.01,vpMath::rad(0),vpMath::rad(0),vpMath::rad(0));
+  wMe.buildFrom(0.0,0.0,0.01,vpMath::rad(5),vpMath::rad(5),vpMath::rad(5));
 //  wMe.buildFrom(0.,0.,0.01,0,0,0);
 
   cout  << "wMe=\n" << wMe << endl;
 
   cMo = cMw * wMe * eMo;
 
-  cout << "cMo=\n" << cMo << endl;
+  cout << "cMo=\n" << cMo << endl;*/
+
+  cMo.buildFrom(0.0,0.0,ZcMo,vpMath::rad(0),vpMath::rad(0),vpMath::rad(1));
   
   //set the robot at the desired position
   sim.setCameraPosition(cMo) ;
-  I =0 ;
+  I = 0 ;
   sim.getImage(I,cam);  // and aquire the image I
 
   
@@ -407,9 +413,13 @@ main(int argc, const char ** argv)
   cout << "Size of Lsd:" << Lsd.getRows() << "x" << Lsd.getCols() <<endl;
   //cout << "Lsd=\n" << Lsd <<endl;
 
-  vpVelocityTwistMatrix cVw;
+/*  vpVelocityTwistMatrix cVw;
   cVw.buildFrom(cMw);
-  cout << "cVw=\n" << cVw <<endl;
+  cout << "cVw=\n" << cVw <<endl;*/
+
+  vpVelocityTwistMatrix cVo;
+  cVo.buildFrom(cMo);
+  cout << "cVo=\n" << cVo <<endl;
 
   vpMatrix Js;
   vpMatrix Jn;
@@ -424,7 +434,7 @@ main(int argc, const char ** argv)
       Jn[4][3]=1;
       Jn[5][4]=1;
 
-      Js=-Lsd*cVw*Jn;
+      Js=-Lsd*cVo*Jn;
 
       //cout << "Lsd*cVw=\n" << Lsd*cVw << endl;
 
@@ -453,7 +463,7 @@ main(int argc, const char ** argv)
       Jn.setIdentity();
 
 
-      Js=-Lsd*cVw*Jn;
+      Js=-Lsd*cVo*Jn;
 
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
 
@@ -508,7 +518,7 @@ main(int argc, const char ** argv)
   graphy.setColor(0,0,vpColor::red);
   graphy.setTitle(0,"Error");
   graphy.setTitle(1,"Velocity: cm/s & rad/s");
-  graphy.setTitle(2,"cdRc: m & rad");
+  graphy.setTitle(2,"odRo: m & rad");
   //graphy.setColor(1,0,vpColor::blue);
 
   char legend[40];
@@ -546,8 +556,8 @@ main(int argc, const char ** argv)
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
 
-  vpHomogeneousMatrix edMe,edMw ;
-  edMw.buildFrom(0,0,0,0,0,0);
+ // vpHomogeneousMatrix edMe,edMw ;
+  vpHomogeneousMatrix odMo ;
 
   do
   {
@@ -558,16 +568,17 @@ main(int argc, const char ** argv)
 
     //robot.getPosition(wMe) ;
 
-    cout << "wMe(" << iter << ")=\n" <<wMe<< endl;
+    //cout << "wMe(" << iter << ")=\n" <<wMe<< endl;
 
     // Compute the position of the camera wrt the object frame
-    cMo = cMw * wMe * eMo;
+    //cMo = cMw * wMe * eMo;
 
     //  Acquire the new image
     sim.setCameraPosition(cMo) ;
+    sim.getImage(I,cam) ;
 
-    cout << "cMo(" << iter << ")=\n" <<cMo<< endl;
-
+    //cout << "cMo(" << iter << ")=\n" <<cMo<< endl;
+/*
     edMe = edMw * wMe;
 
     cout << "edMe=\n" << edMe << endl;
@@ -580,11 +591,22 @@ main(int argc, const char ** argv)
     for(int i=0;i<3;i++)
         graphy.plot(2,i,iter,TedMe[i]);
     for(int i=0;i<3;i++)
-        graphy.plot(2,i+3,iter,RedMe[i]);
+        graphy.plot(2,i+3,iter,RedMe[i]);*/
+
     //cout << "TedMe=\n" << TedMe << endl;
     //cout << "RedMe=\n" << RedMe << endl;
 
-    sim.getImage(I,cam) ;
+    odMo = cMod.inverse() * cMo;
+
+    vpTranslationVector TodMo;
+    odMo.extract(TodMo);
+    vpThetaUVector RodMo;
+    odMo.extract(RodMo);
+
+    for(int i=0;i<3;i++)
+        graphy.plot(2,i,iter,TodMo[i]);
+    for(int i=0;i<3;i++)
+        graphy.plot(2,i+3,iter,RodMo[i]);
 
     Inoised = I;
     if (add_noise && nsModel == Gauss_dynamic)
@@ -655,13 +677,27 @@ main(int argc, const char ** argv)
         graphy.plot(1,i,iter,v[i]);
     }
 
-    std::cout << "lambda = " << lambda << "  mu = " << mu ;
-    std::cout << " |Tc| = " << sqrt(v.sumSquare()) << std::endl;
+
+    if(pjModel==parallel)
+    {
+        vpColVector vc=v;
+        v.resize(6);
+        v[5]=vc[4];
+        v[4]=vc[3];
+        v[3]=vc[2];
+        v[2]=0;
+        v[1]=vc[1];
+        v[0]=vc[0];
+    }
+
+    cout << "v=" << v << endl;
+    cout << "lambda = " << lambda << "  mu = " << mu ;
+    cout << " |Tc| = " << sqrt(v.sumSquare()) << endl;
 
     // send the robot velocity
     //robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
 
-    wMe = wMe * vpExponentialMap::direct(v,0.04);
+    cMo =  cMo * vpExponentialMap::direct(v,0.04);
 
     vpTime::wait(20);
 

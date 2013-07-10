@@ -1395,6 +1395,8 @@ npImageSimulator::cameraProjection(vpPoint &pt,const vpHomogeneousMatrix &cMo,do
                 pt.p[0] = pt.cP[0]*d;
                 pt.p[1] = pt.cP[1]*d;
                 pt.p[2] = 1;
+
+                //cout << "pt.p[0]="<< pt.p[0] << " pt.p[1]=" << pt.p[1] << endl;
                 break;
             }
             //parallel projection
@@ -1403,6 +1405,8 @@ npImageSimulator::cameraProjection(vpPoint &pt,const vpHomogeneousMatrix &cMo,do
                 pt.p[0] = pt.cP[0];
                 pt.p[1] = pt.cP[1];
                 pt.p[2] = 1;
+
+                //cout << "pt.p[0]="<< pt.p[0] << " pt.p[1]=" << pt.p[1] << endl;
                 break;
             }
             //weak perspective projection
@@ -1439,6 +1443,8 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
   cMt.extract(R);
 
   normal_Cam = R * normal_obj;
+
+  //cout << "normal_Cam=" << normal_Cam << endl;
   
   visible_result = vpColVector::dotProd(normal_Cam,focal);
   
@@ -1446,7 +1452,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
      cameraProjection(pt[i],cMt);
     //pt[i].track(cMt);
 
-  //cout << "pt[0]: X=" << pt[0].get_X() << " Y=" << pt[0].get_Y() << " Z=" << pt[0].get_Z() <<endl;
+  //cout << "pt[0]: X=" << pt[0].get_X() << " Y=" << pt[0].get_Y() << " Z=" << pt[0].get_Z() <<endl;//Z depends the projection model
 
 
   //here begin to verify the rectangular
@@ -1459,13 +1465,21 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
   e1[1] = pt[1].get_Y() - pt[0].get_Y() ;
   e1[2] = pt[1].get_Z() - pt[0].get_Z() ;
 
+  //cout << "e1=\n" << e1 << endl;
+
   e2[0] = pt[2].get_X() - pt[1].get_X() ;
   e2[1] = pt[2].get_Y() - pt[1].get_Y() ;
   e2[2] = pt[2].get_Z() - pt[1].get_Z() ;
 
+  //cout << "e2=\n" << e2 << endl;
+
   facenormal = vpColVector::crossProd(e1,e2) ; // x production
 
+  //cout << "facenormal=\n" << facenormal << endl;
+
   double angle = pt[0].get_X()*facenormal[0] +  pt[0].get_Y()*facenormal[1]  +  pt[0].get_Z()*facenormal[2]  ;
+
+  //cout << "angle=" << angle << endl;
 
   if (angle > 0)
     visible=true;
@@ -1477,6 +1491,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
     for(int i = 0; i < 4; i++)
     {
       project(X[i],cMt,X2[i]);//from X(4 points giving the rectangular of interesting zone) in object frame to X2 in camera frame
+      //cout <<  "X2[i]" << X2[i] << endl;
       cameraProjection(pt[i],cMt);
       //pt[i].track(cMt);
     }
@@ -1484,7 +1499,11 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
     vbase_u = X2[1]-X2[0];
     vbase_v = X2[3]-X2[0];
 
+    //cout << "vbase_u=\n" << vbase_u << "\nvbase_v=\n" << vbase_v << endl;
+
     distance = vpColVector::dotProd(normal_Cam,X2[1]);// . production
+
+    //cout << "distance=" << distance << endl;
     
     if(distance < 0)
     {
@@ -1507,6 +1526,8 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
       //cout << X2[i][0] << " " << X2[i][1] << endl;
       iPa[i].set_i(X2[i][1]);///X2[i][2]
     }
+
+    //cout << "iP:\n" << iPa[0] << "\n" <<iPa[1]<< "\n"<< iPa[2]<< "\n"<<iPa[3]<<endl;
     
     T1.buildFrom(iPa[0],iPa[1],iPa[3]);
     T2.buildFrom(iPa[2],iPa[1],iPa[3]);
@@ -1703,9 +1724,18 @@ npImageSimulator::getPixel(const vpImagePoint &iP, unsigned char &Ipixelplan)
   //calcul de la profondeur de l'intersection
   z = distance/(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()+normal_Cam_optim[2]);
   //calcul coordonnees 3D intersection
-  Xinter_optim[0]=iP.get_u()*z;
-  Xinter_optim[1]=iP.get_v()*z;
-  Xinter_optim[2]=z;
+  if(pjModel==parallel)
+  {
+      Xinter_optim[0]=iP.get_u();
+      Xinter_optim[1]=iP.get_v();
+      Xinter_optim[2]=1;
+  }
+  else
+  {
+      Xinter_optim[0]=iP.get_u()*z;
+      Xinter_optim[1]=iP.get_v()*z;
+      Xinter_optim[2]=z;
+  }
 
   //recuperation des coordonnes de l'intersection dans le plan objet
   //repere plan object : 
@@ -1801,9 +1831,18 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)
   //calcul de la profondeur de l'intersection
   z = distance/(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()+normal_Cam_optim[2]);
   //calcul coordonnees 3D intersection
-  Xinter_optim[0]=iP.get_u()*z;
-  Xinter_optim[1]=iP.get_v()*z;
-  Xinter_optim[2]=z;
+  if(pjModel==parallel)
+  {
+      Xinter_optim[0]=iP.get_u();
+      Xinter_optim[1]=iP.get_v();
+      Xinter_optim[2]=1;
+  }
+  else
+  {
+      Xinter_optim[0]=iP.get_u()*z;
+      Xinter_optim[1]=iP.get_v()*z;
+      Xinter_optim[2]=z;
+  }
 
   //recuperation des coordonnes de l'intersection dans le plan objet
   //repere plan object : 
