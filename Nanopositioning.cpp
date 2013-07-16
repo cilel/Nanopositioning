@@ -42,7 +42,7 @@
 // List of allowed command line options
 #define GETOPTARGS	"cdi:n:hp:b"
 
-#define  Z             1
+#define  Z             1.01
 
 using namespace std;
 
@@ -171,12 +171,12 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 300;
+  int opt_niter = 500;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 10;
   nsModel = Gauss_dynamic;
-  double ZcMo = 0.5;
+  double ZcMo = 1;
   
 
   ipath = "../Images/london.jpg";
@@ -187,6 +187,13 @@ main(int argc, const char ** argv)
                  opt_display, opt_niter,add_noise) == false) {
     return (-1);
   }
+
+  if ((ZcMo-Z)==0)
+  {
+      cout << "ZcMo and Z should be different." << endl;
+      return 0;
+  }
+
 
   // Get the option values
   if (!opt_ipath.empty())
@@ -232,6 +239,7 @@ main(int argc, const char ** argv)
 
   vpColVector X[4];
   for (int i = 0; i < 4; i++) X[i].resize(3);
+
   // Top left corner
   X[0][0] = -0.3;
   X[0][1] = -0.215;
@@ -262,7 +270,7 @@ main(int argc, const char ** argv)
     sim.init(Inoised, X, npImageSimulator::perspective);
 
   
-  vpCameraParameters cam(870, 870, 160, 120);
+  vpCameraParameters cam(870, 870, 160, 120);//160, 120
 
   // ----------------------------------------------------------
   // Create the framegraber (here a simulated image)
@@ -326,7 +334,7 @@ main(int argc, const char ** argv)
 
   cout << "cMo=\n" << cMo << endl;*/
 
-  cMo.buildFrom(0.0,0.0,ZcMo,vpMath::rad(0),vpMath::rad(0),vpMath::rad(1));
+  cMo.buildFrom(0.0,0.0,ZcMo,vpMath::rad(0),vpMath::rad(60),vpMath::rad(0));
   
   //set the robot at the desired position
   sim.setCameraPosition(cMo) ;
@@ -518,7 +526,7 @@ main(int argc, const char ** argv)
   graphy.setColor(0,0,vpColor::red);
   graphy.setTitle(0,"Error");
   graphy.setTitle(1,"Velocity: cm/s & rad/s");
-  graphy.setTitle(2,"odRo: m & rad");
+  graphy.setTitle(2,"odRo: cm & rad");
   //graphy.setColor(1,0,vpColor::blue);
 
   char legend[40];
@@ -604,7 +612,7 @@ main(int argc, const char ** argv)
     odMo.extract(RodMo);
 
     for(int i=0;i<3;i++)
-        graphy.plot(2,i,iter,TodMo[i]);
+        graphy.plot(2,i,iter,TodMo[i]*100);
     for(int i=0;i<3;i++)
         graphy.plot(2,i+3,iter,RodMo[i]);
 
