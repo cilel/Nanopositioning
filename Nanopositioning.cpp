@@ -40,9 +40,8 @@
 #include <visp/vpExponentialMap.h>
 
 // List of allowed command line options
-#define GETOPTARGS	"cdi:n:hp:b"
+#define GETOPTARGS	"cdi:n:hp:bu:"
 
-#define  Z             1.01
 
 using namespace std;
 
@@ -122,7 +121,7 @@ OPTIONS:                                               Default\n\
 
 */
 bool getOptions(int argc, const char **argv, std::string &ipath,
-                bool &click_allowed, bool &display, int &niter, bool &add_noise)
+                bool &click_allowed, bool &display, int &niter, bool &add_noise, double &scale)
 {
   const char *optarg;
   int c;
@@ -141,6 +140,16 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
             pjModel = parallel;
         else
             pjModel = perspective;
+        break;
+    case 'u':
+        if(!strcmp( optarg, "mm" ))
+            scale = 1000;
+        else if (!strcmp( optarg,"um" ))
+            scale = 1000000;
+        else if (!strcmp( optarg,"nm" ))
+            scale = 1000000000;
+        else
+            scale = 1;
         break;
     case 'h': usage(argv[0], NULL, ipath, niter); return false; break;
     default:
@@ -171,28 +180,34 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 500;
+  int opt_niter = 50;
   bool add_noise = false;
   double noise_mean =0;
-  double noise_sdv = 10;
+  double noise_sdv = 5;
   nsModel = Gauss_dynamic;
-  double ZcMo = 1;
-  
+
+  double scale = 1;
+
 
   ipath = "../Images/london.jpg";
 
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
-                 opt_display, opt_niter,add_noise) == false) {
+                 opt_display, opt_niter,add_noise,scale) == false) {
     return (-1);
   }
+
+
+  double ZcMo = 0.0223*scale;
+  double Z =0.02231*scale;
 
   if ((ZcMo-Z)==0)
   {
       cout << "ZcMo and Z should be different." << endl;
       return 0;
   }
+
 
 
   // Get the option values
@@ -241,24 +256,24 @@ main(int argc, const char ** argv)
   for (int i = 0; i < 4; i++) X[i].resize(3);
 
   // Top left corner
-  X[0][0] = -0.3;
-  X[0][1] = -0.215;
-  X[0][2] = 0;
-  
+  X[0][0] = -0.00008*scale;
+  X[0][1] = -0.00006*scale;
+  X[0][2] = 0*scale;
+
   // Top right corner
-  X[1][0] = 0.3;
-  X[1][1] = -0.215;
-  X[1][2] = 0;
+  X[1][0] = 0.00008*scale;
+  X[1][1] = -0.00006*scale;
+  X[1][2] = 0*scale;
   
   // Bottom right corner
-  X[2][0] = 0.3;
-  X[2][1] = 0.215;
-  X[2][2] = 0;
+  X[2][0] = 0.00008*scale;
+  X[2][1] = 0.00006*scale;
+  X[2][2] = 0*scale;
   
   //Bottom left corner
-  X[3][0] = -0.3;
-  X[3][1] = 0.215;
-  X[3][2] = 0;
+  X[3][0] = -0.00008*scale;
+  X[3][1] = 0.00006*scale;
+  X[3][2] = 0*scale;
 
   npImageSimulator sim;
 
@@ -270,14 +285,14 @@ main(int argc, const char ** argv)
     sim.init(Inoised, X, npImageSimulator::perspective);
 
   
-  vpCameraParameters cam(870, 870, 160, 120);//160, 120
+  vpCameraParameters cam(8984549/scale, 8955094/scale, 160, 120);//160, 120
 
   // ----------------------------------------------------------
   // Create the framegraber (here a simulated image)
   vpImage<unsigned char> I(240,320,0) ;
   vpImage<unsigned char> Id ;
 
-  //camera desired position
+  //camera desired position-7.214992365e-06
   vpHomogeneousMatrix cMod ;
   cMod[2][3] = ZcMo;
 
@@ -334,10 +349,11 @@ main(int argc, const char ** argv)
 
   cout << "cMo=\n" << cMo << endl;*/
 
-  cMo.buildFrom(0.0,0.0,ZcMo,vpMath::rad(0),vpMath::rad(60),vpMath::rad(0));
-  
+//  cMo.buildFrom(0.000000*scale,0.000000*scale,ZcMo,vpMath::rad(-5),vpMath::rad(5),vpMath::rad(5));
+  cMo.buildFrom(0.000000*scale,0.000001*scale,ZcMo,vpMath::rad(0),vpMath::rad(0),vpMath::rad(10));
+
   //set the robot at the desired position
-  sim.setCameraPosition(cMo) ;
+  sim.setCameraPosition(cMo);
   I = 0 ;
   sim.getImage(I,cam);  // and aquire the image I
 
@@ -519,31 +535,49 @@ main(int argc, const char ** argv)
   int iter   = 0;
   int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
 
-  vpPlot graphy(3, 600, 800, 20, 300, "Nanopositioning");
-  graphy.initGraph(0,1);
-  graphy.initGraph(1,6);
-  graphy.initGraph(2,6);
-  graphy.setColor(0,0,vpColor::red);
-  graphy.setTitle(0,"Error");
-  graphy.setTitle(1,"Velocity: cm/s & rad/s");
-  graphy.setTitle(2,"odRo: cm & rad");
-  //graphy.setColor(1,0,vpColor::blue);
+  vpPlot graphy(4, 600, 800, 20, 300, "Nanopositioning");
+  vpPlot graphy2(2, 600, 400, 820, 300, "Nanopositioning");
+
+  graphy.initGraph(0,3);
+  graphy.initGraph(1,3);
+  graphy.initGraph(2,3);
+  graphy.initGraph(3,3);
+
+  graphy.setTitle(0,"odMo: m");
+  graphy.setTitle(1,"odMo: deg");
+  graphy.setTitle(2,"Velocity: m/s ");
+  graphy.setTitle(3,"Velocity: deg/s");
+
+
+  char unit[40];
+  graphy2.initGraph(0,1);
+  graphy2.initGraph(1,1);
+  graphy2.setTitle(0,"Error");
+  graphy2.setTitle(1,"Trajectory of object");
+  strncpy( unit, "x", 40 );
+  graphy2.setUnitX(1,unit);
+  strncpy( unit, "y", 40 );
+  graphy2.setUnitY(1,unit);
+  strncpy( unit, "z", 40 );
+  graphy2.setUnitZ(1,unit);
+  graphy2.setColor(0,0,vpColor::red);
+
 
   char legend[40];
   strncpy( legend, "Norm Error", 40 );
-  graphy.setLegend(0,0,legend);
+  graphy2.setLegend(0,0,legend);
   strncpy( legend, "Tx", 40 );
-  graphy.setLegend(1,0,legend);
+  graphy.setLegend(0,0,legend);
   strncpy( legend, "Ty", 40 );
-  graphy.setLegend(1,1,legend);
+  graphy.setLegend(0,1,legend);
   strncpy( legend, "Tz", 40 );
-  graphy.setLegend(1,2,legend);
+  graphy.setLegend(0,2,legend);
   strncpy( legend, "Rx", 40 );
-  graphy.setLegend(1,3,legend);
+  graphy.setLegend(1,0,legend);
   strncpy( legend, "Ry", 40 );
-  graphy.setLegend(1,4,legend);
+  graphy.setLegend(1,1,legend);
   strncpy( legend, "Rz", 40 );
-  graphy.setLegend(1,5,legend);
+  graphy.setLegend(1,2,legend);
   strncpy( legend, "Tx", 40 );
 
   graphy.setLegend(2,0,legend);
@@ -552,15 +586,15 @@ main(int argc, const char ** argv)
   strncpy( legend, "Tz", 40 );
   graphy.setLegend(2,2,legend);
   strncpy( legend, "Rx", 40 );
-  graphy.setLegend(2,3,legend);
+  graphy.setLegend(3,0,legend);
   strncpy( legend, "Ry", 40 );
-  graphy.setLegend(2,4,legend);
+  graphy.setLegend(3,1,legend);
   strncpy( legend, "Rz", 40 );
-  graphy.setLegend(2,5,legend);
+  graphy.setLegend(3,2,legend);
 
   
   double normError = 1000;
-  double threshold=0.5;
+  double threshold=0.05;
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
 
@@ -612,9 +646,11 @@ main(int argc, const char ** argv)
     odMo.extract(RodMo);
 
     for(int i=0;i<3;i++)
-        graphy.plot(2,i,iter,TodMo[i]*100);
+        graphy.plot(0,i,iter,TodMo[i]/scale);
     for(int i=0;i<3;i++)
-        graphy.plot(2,i+3,iter,RodMo[i]);
+        graphy.plot(1,i,iter,vpMath::deg(RodMo[i]));
+
+    cout<< "ZodMo=" << TodMo[2] << endl;
 
     Inoised = I;
     if (add_noise && nsModel == Gauss_dynamic)
@@ -656,7 +692,7 @@ main(int argc, const char ** argv)
 
     normError = sqrt(error.sumSquare()/error.getRows());
 
-    graphy.plot(0,0,iter,normError);
+    graphy2.plot(0,0,iter,normError);
 
     cout << "|e| "<< normError <<endl ;
 
@@ -677,12 +713,14 @@ main(int argc, const char ** argv)
       //	compute the control law
       e = H * Js.t() *error ;
 
+   //   vpMatrix Jp ;
+   //   int rank ;
+    //  rank = Js.pseudoInverse(Jp,1e-20) ;
+    //  cout << "rank " << rank << endl ;
+
       v =  -lambda*e;
 
-      for(int i=0;i<3;i++)
-        graphy.plot(1,i,iter,v[i]*100);
-      for(int i=3;i<6;i++)
-        graphy.plot(1,i,iter,v[i]);
+
     }
 
 
@@ -691,28 +729,46 @@ main(int argc, const char ** argv)
         vpColVector vc=v;
         v.resize(6);
         v[5]=vc[4];
-        v[4]=vc[3];
-        v[3]=vc[2];
+        v[4]=vc[3];//vc[3]
+        v[3]=vc[2];//vc[2]
         v[2]=0;
         v[1]=vc[1];
         v[0]=vc[0];
     }
 
-    cout << "v=" << v << endl;
+    for(int i=0;i<3;i++)
+      graphy.plot(2,i,iter,v[i]/scale);
+    for(int i=0;i<3;i++)
+      graphy.plot(3,i,iter,vpMath::deg(v[i+3]));
+
+    cout << "v=" << v.t() << endl;
     cout << "lambda = " << lambda << "  mu = " << mu ;
     cout << " |Tc| = " << sqrt(v.sumSquare()) << endl;
 
     // send the robot velocity
     //robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
 
+    cout << "cMo=\n" << cMo << endl;
+
     cMo =  cMo * vpExponentialMap::direct(v,0.04);
+
+    cout << "cMo_new=\n" << cMo << endl;
+
+    graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
     vpTime::wait(20);
 
   }
-  while(normError > threshold  && iter < opt_niter);
+ while(normError > threshold  && iter < opt_niter);
+//while(1) ;
 
-  vpDisplay::getClick(graphy.I);
+  while(1)
+  {
+       graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
+  }
+
+  //vpDisplay::getClick(graphy.I);
+  vpDisplay::getClick(graphy2.I);
 
  /* v = 0 ;
   robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;*/

@@ -1455,7 +1455,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
 
   normal_Cam = R * normal_obj; // from normal of plane in object frame to normal in camara frame, |normal_obj|=1
 
-  cout << "normal_Cam=" << normal_Cam << endl;
+  //cout << "normal_Cam=" << normal_Cam << endl;
   
   visible_result = vpColVector::dotProd(normal_Cam,focal);
   
@@ -1465,10 +1465,10 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
 
 
   //X,Y,Z in camera frame. Z depends the projection model and is computed by cMo and z in object frame
-  cout << "pt[0]:" << pt[0].get_X() << " " << pt[0].get_Y() << " " << pt[0].get_Z() <<endl;
-  cout << "pt[1]: " << pt[1].get_X() << " " << pt[1].get_Y() << " " << pt[1].get_Z() <<endl;
-  cout << "pt[2]: " << pt[2].get_X() << " " << pt[2].get_Y() << " " << pt[2].get_Z() <<endl;
-  cout << "pt[3]: " << pt[3].get_X() << " " << pt[3].get_Y() << " " << pt[3].get_Z() <<endl;
+ // cout << "pt[0]:" << pt[0].get_X() << " " << pt[0].get_Y() << " " << pt[0].get_Z() <<endl;
+  //cout << "pt[1]: " << pt[1].get_X() << " " << pt[1].get_Y() << " " << pt[1].get_Z() <<endl;
+  //cout << "pt[2]: " << pt[2].get_X() << " " << pt[2].get_Y() << " " << pt[2].get_Z() <<endl;
+  //cout << "pt[3]: " << pt[3].get_X() << " " << pt[3].get_Y() << " " << pt[3].get_Z() <<endl;
 
   //here begin to verify the rectangular
   
@@ -1490,7 +1490,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
 
   facenormal = vpColVector::crossProd(e1,e2) ; // x production
 
-  cout << "facenormal=\n" << facenormal << endl;
+  //cout << "facenormal=\n" << facenormal << endl;
 
   double angle = pt[0].get_X()*facenormal[0] +  pt[0].get_Y()*facenormal[1]  +  pt[0].get_Z()*facenormal[2]  ;//|a||b|cos(Theta)=a*b
 
@@ -1520,7 +1520,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
     // . production, "distance" is the distance from the camera to the plane (with |normal_Cam|=1, if not, we have to divide by |normal_Cam|)
     distance = vpColVector::dotProd(normal_Cam,X2[1]);
 
-    cout << "distance=" << distance << endl;
+    //cout << "distance=" << distance << endl;
     
     if(distance < 0)
     {
@@ -1536,8 +1536,8 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
       vbase_v_optim[i] = vbase_v[i];
     }
 
-    cout <<  "vbase_u_optim=" << vbase_u_optim[0] << " " << vbase_u_optim[1] << " " <<vbase_u_optim[2]<< endl;
-    cout <<  "vbase_v_optim=" << vbase_v_optim[0] << " " << vbase_v_optim[1] << " " <<vbase_v_optim[2] << endl;
+    //cout <<  "vbase_u_optim=" << vbase_u_optim[0] << " " << vbase_u_optim[1] << " " <<vbase_u_optim[2]<< endl;
+    //cout <<  "vbase_v_optim=" << vbase_v_optim[0] << " " << vbase_v_optim[1] << " " <<vbase_v_optim[2] << endl;
     
     vpImagePoint iPa[4];
     for(unsigned int i = 0; i < 4; i++)
@@ -1545,13 +1545,13 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
         if(pjModel==parallel)
         {
             iPa[i].set_j(X2[i][0]);//
-            cout << "X2[" << i << "]=" << X2[i][0] << " " << X2[i][1] << " " << X2[i][2] << endl;
+            //cout << "X2[" << i << "]=" << X2[i][0] << " " << X2[i][1] << " " << X2[i][2] << endl;
             iPa[i].set_i(X2[i][1]);//
         }
       else
         {
             iPa[i].set_j(X2[i][0]/X2[i][2]);//
-            cout << "X2[" << i << "]=" << X2[i][0] << " " << X2[i][1] << " " << X2[i][2] << endl;
+            //cout << "X2[" << i << "]=" << X2[i][0] << " " << X2[i][1] << " " << X2[i][2] << endl;
             iPa[i].set_i(X2[i][1]/X2[i][2]);//
         }
     }
@@ -1865,7 +1865,7 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)// to be m
       if(normal_Cam_optim[2]==0)
           return false;
       else
-        Xinter_optim[2]=(distance-normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v())/normal_Cam_optim[2];
+        Xinter_optim[2]=(distance-(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()))/normal_Cam_optim[2];
 
       double u = 0, v = 0;
       double diff = 0;
@@ -2057,7 +2057,7 @@ npImageSimulator::getRoi(const unsigned int &Iwidth,
     else
         vpMeterPixelConversion::convertPoint(cam,point[i].get_x(),point[i].get_y(),u,v);
 
-    cout << "u=" << u << "  v=" << v <<endl;
+    //cout << "u=" << u << "  v=" << v <<endl;
 
     if (v < top) top = v;
     if (v > bottom) bottom = v;
