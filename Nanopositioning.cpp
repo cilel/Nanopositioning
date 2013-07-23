@@ -169,8 +169,6 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
   return true;
 }
 
-
-
 int
 main(int argc, const char ** argv)
 {
@@ -180,7 +178,7 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 50;
+  int opt_niter = 70;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 5;
@@ -188,9 +186,7 @@ main(int argc, const char ** argv)
 
   double scale = 1;
 
-
   ipath = "../Images/london.jpg";
-
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
@@ -207,8 +203,6 @@ main(int argc, const char ** argv)
       cout << "ZcMo and Z should be different." << endl;
       return 0;
   }
-
-
 
   // Get the option values
   if (!opt_ipath.empty())
@@ -283,7 +277,6 @@ main(int argc, const char ** argv)
     sim.init(Inoised, X, npImageSimulator::parallel);
   else
     sim.init(Inoised, X, npImageSimulator::perspective);
-
   
   vpCameraParameters cam(8984549/scale, 8955094/scale, 160, 120);//160, 120
 
@@ -300,7 +293,6 @@ main(int argc, const char ** argv)
   sim.setCameraPosition(cMod) ;
   sim.getImage(I,cam);  // and aquire the image I-> Id
   Id = I ;
-
 
   // display the image
 #if defined VISP_HAVE_X11
@@ -323,7 +315,6 @@ main(int argc, const char ** argv)
   }
 #endif
 
-
   // ----------------------------------------------------------
   // position the robot at the initial position
   // ----------------------------------------------------------
@@ -332,25 +323,8 @@ main(int argc, const char ** argv)
 
   vpHomogeneousMatrix cMo;
 
-/*  vpHomogeneousMatrix cMo,eMo,wMe,cMw;
-
-  eMo.setIdentity();
-
-  cMw.buildFrom(0,0,1,0,0,0);
-
-  cout << "cMw=\n" << cMw << endl;
-
-  wMe.buildFrom(0.0,0.0,0.01,vpMath::rad(5),vpMath::rad(5),vpMath::rad(5));
-//  wMe.buildFrom(0.,0.,0.01,0,0,0);
-
-  cout  << "wMe=\n" << wMe << endl;
-
-  cMo = cMw * wMe * eMo;
-
-  cout << "cMo=\n" << cMo << endl;*/
-
 //  cMo.buildFrom(0.000000*scale,0.000000*scale,ZcMo,vpMath::rad(-5),vpMath::rad(5),vpMath::rad(5));
-  cMo.buildFrom(0.000000*scale,0.000001*scale,ZcMo,vpMath::rad(0),vpMath::rad(0),vpMath::rad(10));
+  cMo.buildFrom(0.000000*scale,0.00000*scale,ZcMo,vpMath::rad(0),vpMath::rad(0),vpMath::rad(5));
 
   //set the robot at the desired position
   sim.setCameraPosition(cMo);
@@ -372,9 +346,7 @@ main(int argc, const char ** argv)
   vpImage<unsigned char> Idiff ;
   Idiff = I ;
 
-
   vpImageTools::imageDifference(I,Id,Idiff) ;
-
 
   // Affiche de l'image de difference
 #if defined VISP_HAVE_X11
@@ -392,10 +364,6 @@ main(int argc, const char ** argv)
   }
 #endif
   // create the robot (here a simulated free flying camera)
- /* npSimulatorSEM robot ;
-  robot.setSamplingTime(0.04);
-  robot.setPosition(wMe) ;*/
-
   // ------------------------------------------------------
   // Visual feature, interaction matrix, error
   // s, Ls, Lsd, Lt, Lp, etc
@@ -403,7 +371,6 @@ main(int argc, const char ** argv)
 
   // current visual feature built from the image 
   // (actually, this is the image...)
-
 
   npFeatureLuminance sI ;
   if(pjModel == parallel)
@@ -443,7 +410,7 @@ main(int argc, const char ** argv)
 
   vpVelocityTwistMatrix cVo;
   cVo.buildFrom(cMo);
-  cout << "cVo=\n" << cVo <<endl;
+  //cout << "cVo=\n" << cVo <<endl;
 
   vpMatrix Js;
   vpMatrix Jn;
@@ -468,11 +435,10 @@ main(int argc, const char ** argv)
       //cout << "Js=\n" << Js <<endl;
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
 
-
       // Compute the Hessian H = L^TL
       Hsd = Js.AtA() ;
 
-      cout << "Hsd=\n" << Hsd <<endl;
+      //cout << "Hsd=\n" << Hsd <<endl;
 
       // Compute the Hessian diagonal for the Levenberg-Marquartd
       // optimization process
@@ -485,8 +451,6 @@ main(int argc, const char ** argv)
   {
       Jn.resize(6,6);
       Jn.setIdentity();
-
-
       Js=-Lsd*cVo*Jn;
 
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
@@ -506,15 +470,11 @@ main(int argc, const char ** argv)
       for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
   }
 
-
-
-
   // ------------------------------------------------------
   // Control law
   double lambda ; //gain
   vpColVector e ;
   vpColVector v ; // camera velocity send to the robot
-
 
   // ----------------------------------------------------------
   // Minimisation
@@ -522,11 +482,9 @@ main(int argc, const char ** argv)
   double mu ;  // mu = 0 : Gauss Newton ; mu != 0  : LM
   double lambdaGN;
 
-
   mu       =  0.01;
   lambda   = 10 ;
   lambdaGN = 10;
-
 
   // set a velocity control mode 
   //robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL) ;
@@ -594,7 +552,7 @@ main(int argc, const char ** argv)
 
   
   double normError = 1000;
-  double threshold=0.05;
+  double threshold=0.5;
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
 
@@ -606,37 +564,9 @@ main(int argc, const char ** argv)
 
     std::cout << "--------------------------------------------" << iter++ << std::endl ;
 
-    // get the robot end-effector position
-
-    //robot.getPosition(wMe) ;
-
-    //cout << "wMe(" << iter << ")=\n" <<wMe<< endl;
-
-    // Compute the position of the camera wrt the object frame
-    //cMo = cMw * wMe * eMo;
-
     //  Acquire the new image
     sim.setCameraPosition(cMo) ;
     sim.getImage(I,cam) ;
-
-    //cout << "cMo(" << iter << ")=\n" <<cMo<< endl;
-/*
-    edMe = edMw * wMe;
-
-    cout << "edMe=\n" << edMe << endl;
-
-    vpTranslationVector TedMe;
-    edMe.extract(TedMe);
-    vpThetaUVector RedMe;
-    edMe.extract(RedMe);
-
-    for(int i=0;i<3;i++)
-        graphy.plot(2,i,iter,TedMe[i]);
-    for(int i=0;i<3;i++)
-        graphy.plot(2,i+3,iter,RedMe[i]);*/
-
-    //cout << "TedMe=\n" << TedMe << endl;
-    //cout << "RedMe=\n" << RedMe << endl;
 
     odMo = cMod.inverse() * cMo;
 
@@ -720,9 +650,7 @@ main(int argc, const char ** argv)
 
       v =  -lambda*e;
 
-
     }
-
 
     if(pjModel==parallel)
     {
@@ -750,7 +678,24 @@ main(int argc, const char ** argv)
 
     cout << "cMo=\n" << cMo << endl;
 
-    cMo =  cMo * vpExponentialMap::direct(v,0.04);
+    vpHomogeneousMatrix oV;
+    vpThetaUVector vR;
+    vR[0]=v[3]*0.04;
+    vR[1]=v[4]*0.04;
+    vR[2]=v[5]*0.04;
+
+    oV.insert(vR);
+    oV[0][3]=v[0]*0.04;
+    oV[1][3]=v[1]*0.04;
+    oV[2][3]=v[2]*0.04;
+
+    cMo = cMo * oV;
+
+    cout << "oVo=\n "<< oV << endl;
+
+    //cMo =  cMo * vpExponentialMap::direct(v,0.04);
+
+    //cout << "v ExpMap=\n" << vpExponentialMap::direct(v,0.04) << endl;
 
     cout << "cMo_new=\n" << cMo << endl;
 
@@ -763,9 +708,8 @@ main(int argc, const char ** argv)
 //while(1) ;
 
   while(1)
-  {
        graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
-  }
+
 
   //vpDisplay::getClick(graphy.I);
   vpDisplay::getClick(graphy2.I);
