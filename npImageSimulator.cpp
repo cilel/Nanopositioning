@@ -1750,21 +1750,26 @@ npImageSimulator::getPixel(const vpImagePoint &iP, unsigned char &Ipixelplan)
   //methoed algebrique
   double z;
 
-  //calcul de la profondeur de l'intersection
-  z = distance/(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()+normal_Cam_optim[2]);
-  //calcul coordonnees 3D intersection
   if(pjModel==parallel)
   {
       Xinter_optim[0]=iP.get_u();
       Xinter_optim[1]=iP.get_v();
-      Xinter_optim[2]=1;
+      if(normal_Cam_optim[2]==0)
+          return false;
+      else
+        Xinter_optim[2]=(distance-(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()))/normal_Cam_optim[2];
+
   }
   else
   {
+
+  //calcul de la profondeur de l'intersection
+  z = distance/(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()+normal_Cam_optim[2]);
+  //calcul coordonnees 3D intersection
       Xinter_optim[0]=iP.get_u()*z;
       Xinter_optim[1]=iP.get_v()*z;
       Xinter_optim[2]=z;
-  }
+   }
 
   //recuperation des coordonnes de l'intersection dans le plan objet
   //repere plan object : 
@@ -1867,31 +1872,6 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)// to be m
       else
         Xinter_optim[2]=(distance-(normal_Cam_optim[0]*iP.get_u()+normal_Cam_optim[1]*iP.get_v()))/normal_Cam_optim[2];
 
-      double u = 0, v = 0;
-      double diff = 0;
-      for(unsigned int i = 0; i < 3; i++)
-      {
-        diff = (Xinter_optim[i]-X0_2_optim[i]);
-        u += diff*vbase_u_optim[i];
-        v += diff*vbase_v_optim[i];
-      }
-      u = u/(euclideanNorm_u*euclideanNorm_u);
-      v = v/(euclideanNorm_v*euclideanNorm_v);
-
-      if( u > 0 && v > 0 && u < 1. && v < 1.)
-      {
-        double i2,j2;
-        i2=v*(Ic.getHeight()-1);
-        j2=u*(Ic.getWidth()-1);
-        if (interp == BILINEAR_INTERPOLATION)
-          Ipixelplan = Ic.getValue(i2,j2);
-        else if (interp == SIMPLE)
-          Ipixelplan = Ic[(unsigned int)i2][(unsigned int)j2];
-        return true;
-      }
-      else
-        return false;
-
   }
   else
   {
@@ -1903,7 +1883,7 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)// to be m
       Xinter_optim[1]=iP.get_v()*z;
       Xinter_optim[2]=z;
 
-
+  }
       //recuperation des coordonnes de l'intersection dans le plan objet
       //repere plan object :
       //	centre = X0_2_optim[i] (premier point definissant le plan)
@@ -1934,7 +1914,7 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)// to be m
       else
         return false;
 
-  }
+
 
 
 }

@@ -1,4 +1,4 @@
-PROJECT(Nanopositioning)
+PROJECT(Nanopositioning_Simulator)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
@@ -12,5 +12,5 @@ ENDIF(VISP_FOUND)
 
 #INCLUDE_DIRECTORIES(test)
 
-ADD_EXECUTABLE(Nanopositioning Nanopositioning.cpp npFeatureLuminance.cpp npFeatureLuminance.h  npImageSimulator.cpp npImageSimulator.h)
-#npSimulatorSEM.cpp npSimulatorSEM.h
+ADD_EXECUTABLE(Nanopositioning_Simulator Nanopositioning_Simulator.cpp npFeatureLuminance.cpp npFeatureLuminance.h  npImageSimulator.cpp npImageSimulator.h)
+
