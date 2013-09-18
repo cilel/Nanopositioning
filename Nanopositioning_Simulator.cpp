@@ -227,6 +227,10 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
        if (sendto(s, Pose_send, sizeof(Pose_send), 0, (struct sockaddr *) &si_other, slen)==-1)
            diep("sendto()");
        close(s);
+
+
+       vpTime::wait(200);
+
        return 0;
 
 }
@@ -262,7 +266,7 @@ main(int argc, const char ** argv)
   std::string filename;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 70;
+  int opt_niter = 400;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 5;
@@ -453,9 +457,9 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
-   // vm[0]=-0.000001*scale;//velocity
-    vm[1]=0.000003*scale;//velocity
-    //vm[5]=vpMath::rad(1);
+ //  vm[0]=0.000003*scale;//velocity
+ //  vm[1]=0.000005*scale;//velocity
+  vm[5]=vpMath::rad(1);
 
     wMe =  wMe * vpExponentialMap::direct(vm,1);
     cMo = cMw * wMe * eMo ;
@@ -467,9 +471,9 @@ main(int argc, const char ** argv)
 
     send_wMe(wMe,scale);
 
-    I.resize(0,0);
+    //vpTime::wait(1000);
 
-    vpTime::wait(500);
+    I.resize(0,0);
 
     if(ifstream(filename_c))
     {
@@ -568,8 +572,8 @@ main(int argc, const char ** argv)
   cVw.buildFrom(cMw);
   cout << "cVw=\n" << cVw <<endl;*/
 
-  vpVelocityTwistMatrix cVw;
-  cVw.buildFrom(cMw);
+  vpVelocityTwistMatrix cVe;
+  cVe.buildFrom(cMw * wMe);
   //cout << "cVo=\n" << cVo <<endl;
 
   vpMatrix Js;
@@ -585,7 +589,7 @@ main(int argc, const char ** argv)
       Jn[4][3]=1;
       Jn[5][4]=1;
 
-      Js=-Lsd*cVw*Jn;
+      Js=-Lsd*cVe*Jn;
 
       //cout << "Lsd*cVw=\n" << Lsd*cVw << endl;
 
@@ -611,7 +615,7 @@ main(int argc, const char ** argv)
   {
       Jn.resize(6,6);
       Jn.setIdentity();
-      Js=-Lsd*cVw*Jn;
+      Js=-Lsd*cVe*Jn;
 
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
 
@@ -653,8 +657,8 @@ main(int argc, const char ** argv)
   int iter   = 0;
   int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
 
-  vpPlot graphy(4, 600, 800, 20, 1300, "Nanopositioning");
-  vpPlot graphy2(2, 600, 400, 820, 1300, "Nanopositioning");
+  vpPlot graphy(4, 600, 800, 1620, 1300, "Nanopositioning");
+  vpPlot graphy2(2, 600, 400, 020, 1300, "Nanopositioning");
 
   graphy.initGraph(0,3);
   graphy.initGraph(1,3);
@@ -735,6 +739,7 @@ main(int argc, const char ** argv)
     if(ifstream(filename_c))
     {
         vpImageIo::read(I,filename) ;
+
         if( remove( filename_c) != 0 )
            perror( "Error deleting image file" );
     }
@@ -818,8 +823,8 @@ main(int argc, const char ** argv)
         v[4]=vc[3];//vc[3]
         v[3]=vc[2];//vc[2]
         v[2]=0;
-        v[1]=vc[1];
-        v[0]=vc[0];
+        v[1]=vc[1];//vc[1]
+        v[0]=vc[0];//vc[0]
     }
 
     for(int i=0;i<3;i++)
@@ -865,11 +870,11 @@ main(int argc, const char ** argv)
 
     graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
-    vpTime::wait(500);
-
   }
  while(normError > threshold  && iter < opt_niter);
 //while(1) ;
+
+   cout << "===========================END==============================" << endl;
 
   while(1)
        graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
@@ -880,8 +885,6 @@ main(int argc, const char ** argv)
 
  /* v = 0 ;
   robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;*/
-
-  cout << "===========================END==============================";
 
 }
 
