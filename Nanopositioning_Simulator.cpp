@@ -161,7 +161,7 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
             scale = 1000000;
         else if (!strcmp( optarg,"nm" ))
             scale = 1000000000;
-        else
+        else // m
             scale = 1;
         break;
     case 'h': usage(argv[0], NULL, ipath, niter); return false; break;
@@ -229,7 +229,7 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
        close(s);
 
 
-       vpTime::wait(200);
+       vpTime::wait(500);
 
        return 0;
 
@@ -264,9 +264,10 @@ main(int argc, const char ** argv)
   std::string opt_ipath;
   std::string ipath;
   std::string filename;
+  std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 400;
+  int opt_niter = 40;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 5;
@@ -276,6 +277,11 @@ main(int argc, const char ** argv)
   double scale = 1;
 
   ipath = "/dev/shm/out.pgm";
+  readFileFlag = "/dev/shm/flag";
+  ofstream filecMo,fileVelociy,fileResidu;
+  filecMo.open ("../Result/Trajectory.txt");
+  fileVelociy.open("../Result/Velocity.txt");
+  fileResidu.open("../Result/Residual.txt");
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
@@ -283,7 +289,7 @@ main(int argc, const char ** argv)
     return (-1);
   }
 
-  double Z =0.007*scale;//0.020962*scale
+  double Z =0.002*scale;//0.020962*scale
 
 /*
   double ZcMo = 0.0223*scale;
@@ -312,15 +318,56 @@ main(int argc, const char ** argv)
     exit(-1);
   }
 
+
+
+  vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr;
+
+  wMcR.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-3.55*10e-3*scale,1.92167*0.01*scale,0,0,0);
+
+
+/*
+  wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,0*0.001*scale,1.92184*0.01*scale,0,0,0);
+*/
+  cout << "scale=" << scale << endl;
+  cout << "wMe_desired=\n" << wMe << endl;
+
+  Tr.buildFrom(0,0,0,vpMath::rad(180),0,0);
+
+  wMc = wMcR*Tr;
+
+  cMw = wMc.inverse();
+  eMo = wMe.inverse() * wMo;
+  //eMo.setIdentity();
+
+  cMod = cMw * wMo;
+
+  //send_wMe(wMe,scale);//test
+
+  //test
+ /* vpThetaUVector R_cMod;
+   cMod.extract(R_cMod);
+   cout<< "R_cMod=" << R_cMod << endl;*/
+
+  cout << "cMod=\n"<< cMod << endl;
+
   vpImage<unsigned char> I,Id;
   filename = ipath;
   const char * filename_c = filename.c_str();
 
+  if( remove( readFileFlag.c_str()) != 0 )
+        perror( "Error deleting image file" );
+
+  vpTime::wait(100);
+
   if(ifstream(filename_c))
   {
       vpImageIo::read(I,filename) ;
-      if( remove( filename_c) != 0 )
-         perror( "Error deleting image file" );
+   //   if( remove( filename_c) != 0 )
+   //      perror( "Error deleting image file" );
   }
   else
       perror( "desired image dose not exist" );
@@ -334,84 +381,8 @@ main(int argc, const char ** argv)
   int Iw, Ih;//size of image
   Iw = Id.getWidth();
   Ih = Id.getHeight();
-  //double Iscale = Iw/Ih;
 
   vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120
-
-  /*    vpColVector X[4];
-       for (int i = 0; i < 4; i++) X[i].resize(3);
-
-       // Top left corner
-       double imageWidth = 0.00002*scale;
-       double imageHeight = imageWidth*Iscale*scale;
-
-       X[0][0] = -imageWidth;
-       X[0][1] = -imageHeight;
-       X[0][2] = 0*scale;
-
-       // Top right corner
-       X[1][0] = imageWidth;
-       X[1][1] = -imageHeight;
-       X[1][2] = 0*scale;
-
-       // Bottom right corner
-       X[2][0] = imageWidth;
-       X[2][1] = imageHeight;
-       X[2][2] = 0*scale;
-
-       //Bottom left corner
-       X[3][0] = -imageWidth;
-       X[3][1] = imageHeight;
-       X[3][2] = 0*scale;
-
-       npImageSimulator sim;
-
-       sim.setInterpolationType(npImageSimulator::BILINEAR_INTERPOLATION) ;
-
-       if(pjModel==parallel)
-         sim.init(Id, X, npImageSimulator::parallel);
-       else
-         sim.init(Id, X, npImageSimulator::perspective);
-
-       //camera desired position-7.214992365e-06
-
-       vpHomogeneousMatrix cMod ;
-       cMod[2][3] = ZcMo;
-
-       //set the robot at the desired position
-       sim.setCameraPosition(cMod) ;
-       sim.getImage(Id,cam);  // and aquire the image I-> Id
-
-       cout << "x" << endl;
-       cout << Id.getCols() << "x" << Id.getRows() << endl;*/
-
-
-  vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr;
-/*
-  wMc.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
-  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
-  wMo.buildFrom(0*0.001*scale,-3.59483*10e-3*scale,1.92184*0.01*scale,0,0,0);
-*/
-
-  wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
-  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
-  wMo.buildFrom(0*0.001*scale,0*0.001*scale,1.92184*0.01*scale,0,0,0);
-
-  cout << "scale=" << scale << endl;
-  cout << "wMe_desired=\n" << wMe << endl;
-
-  Tr.buildFrom(0,0,0,vpMath::rad(180),0,0);
-
-  wMc = wMcR*Tr;
-
-  cMw = wMc.inverse();
-  eMo = wMe.inverse() * wMo;
-  //eMo.setIdentity();
-
-
-  cMod = cMw * wMo;
-
-  cout << "cMod=\n"<< cMod << endl;
 
   // display the image
 #if defined VISP_HAVE_X11
@@ -424,7 +395,7 @@ main(int argc, const char ** argv)
 
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
   if (opt_display) {
-    d.init(I, 1620, 10, "Photometric visual servoing : s*") ;
+    d.init(I, 1620, 10, "Photometric VS desired feature : s*") ;
     vpDisplay::display(I);
     vpDisplay::flush(I);
   }
@@ -435,7 +406,7 @@ main(int argc, const char ** argv)
 #endif
 
 
-   vpColVector vm;//in meter or specified unit
+   vpColVector vm;//velocity to be sent for the init pose, in meter or specified unit
 /*   vpHomogeneousMatrix vmH;
 
    vmH.buildFrom(0*scale,0*scale,0*scale,vpMath::rad(0),vpMath::rad(0),vpMath::rad(0));//velocity
@@ -447,9 +418,6 @@ main(int argc, const char ** argv)
    vmH.extract(Tv);
    vpThetaUVector Rv;
    vmH.extract(Rv);
-
-
-   vm[0]=Tv[0];//convert meter to milimeter
    vm[1]=Tv[1];
    vm[2]=Tv[2];
    vm[3]=Rv[0];
@@ -457,9 +425,9 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
- //  vm[0]=0.000003*scale;//velocity
- //  vm[1]=0.000005*scale;//velocity
-  vm[5]=vpMath::rad(1);
+   vm[0]=0.000001*scale;//velocity
+ //  vm[1]=0.000001*scale;//velocity
+ //  vm[5]=vpMath::rad(-0.1);
 
     wMe =  wMe * vpExponentialMap::direct(vm,1);
     cMo = cMw * wMe * eMo ;
@@ -475,11 +443,16 @@ main(int argc, const char ** argv)
 
     I.resize(0,0);
 
+    if( remove( readFileFlag.c_str()) != 0 )
+          perror( "Error deleting image file" );
+
+    vpTime::wait(100);
+
     if(ifstream(filename_c))
     {
         vpImageIo::read(I,filename) ;
-        if( remove( filename_c) != 0 )
-           perror( "Error deleting image file" );
+    //    if( remove( filename_c) != 0 )
+    //       perror( "Error deleting image file" );
     }
     else
         perror( "current image dose not exist" );
@@ -497,7 +470,7 @@ main(int argc, const char ** argv)
   
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
   if (opt_display) {
-    d.init(I, 1620, 10, "Photometric visual servoing : s") ;
+    d.init(I, 1620, 10, "Photometric VS current feature : s") ;
     vpDisplay::display(I) ;
     vpDisplay::flush(I) ;
   }
@@ -572,13 +545,14 @@ main(int argc, const char ** argv)
   cVw.buildFrom(cMw);
   cout << "cVw=\n" << cVw <<endl;*/
 
-  vpVelocityTwistMatrix cVe;
+  vpVelocityTwistMatrix cVe; //cVo
   cVe.buildFrom(cMw * wMe);
-  //cout << "cVo=\n" << cVo <<endl;
+  //cVo.buildFrom(cMo);
+//  cout << "cVo=\n" << cVo <<endl;
 
-  vpMatrix Js;
-  vpMatrix Jn;
-  vpMatrix diagHsd;
+  vpMatrix Js;// visual feature Jacobian
+  vpMatrix Jn;// robot Jacobian
+  vpMatrix diagHsd;// diag(Hsd)
 
  if(pjModel==parallel)
   {
@@ -637,7 +611,7 @@ main(int argc, const char ** argv)
   // ------------------------------------------------------
   // Control law
   double lambda ; //gain
-  vpColVector e ;
+  vpColVector e ;// velocity to be multiply by lamda
   vpColVector v ; // camera velocity send to the robot
 
   // ----------------------------------------------------------
@@ -715,7 +689,7 @@ main(int argc, const char ** argv)
   graphy.setLegend(3,2,legend);
 
   
-  double normError = 1000;
+  double normError = 1000; // norm error = |I-I*|
   double threshold=0.5;
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
@@ -728,7 +702,14 @@ main(int argc, const char ** argv)
 
     std::cout << "--------------------------------------------" << iter++ << std::endl ;
 
+    filecMo << iter;
+
     cMo = cMw * wMe * eMo;
+
+    for(int m=0;m<3;m++)
+        filecMo << "\t" << cMo[m][3];
+
+    filecMo << endl;
 
     //  Acquire the new image
     //sim.setCameraPosition(cMo) ;
@@ -736,12 +717,17 @@ main(int argc, const char ** argv)
 
     // Acquir new image from blender
 
+    if( remove( readFileFlag.c_str()) != 0 )
+          perror( "Error deleting image file" );
+
+    vpTime::wait(100);
+
     if(ifstream(filename_c))
     {
         vpImageIo::read(I,filename) ;
 
-        if( remove( filename_c) != 0 )
-           perror( "Error deleting image file" );
+      //  if( remove( filename_c) != 0 )
+      //     perror( "Error deleting image file" );
     }
     else
         perror( "current image dose not exist" );
@@ -788,6 +774,7 @@ main(int argc, const char ** argv)
     graphy2.plot(0,0,iter,normError);
 
     cout << "|e| "<< normError <<endl ;
+    fileResidu << iter << "\t" << normError << endl;
 
     // double t = vpTime::measureTimeMs() ;
 
@@ -832,6 +819,8 @@ main(int argc, const char ** argv)
     for(int i=0;i<3;i++)
       graphy.plot(3,i,iter,vpMath::deg(v[i+3]));
 
+    fileVelociy << iter << "\t" << v.t() << endl;
+
     cout << "v=" << v.t() << endl;
     cout << "lambda = " << lambda << "  mu = " << mu ;
     cout << " |Tc| = " << sqrt(v.sumSquare()) << endl;
@@ -874,7 +863,8 @@ main(int argc, const char ** argv)
  while(normError > threshold  && iter < opt_niter);
 //while(1) ;
 
-   cout << "===========================END==============================" << endl;
+ filecMo.close();
+ cout << "===========================END==============================" << endl;
 
   while(1)
        graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
@@ -883,8 +873,6 @@ main(int argc, const char ** argv)
   //vpDisplay::getClick(graphy.I);
   vpDisplay::getClick(graphy2.I);
 
- /* v = 0 ;
-  robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;*/
 
 }
 

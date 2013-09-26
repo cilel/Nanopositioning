@@ -159,7 +159,7 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 	    
 	      pixInfo[l].x = x;
 	      pixInfo[l].y = y;
-	      pixInfo[l].Z   = Z ;
+          pixInfo[l].Z = Z ;
 
 	      l++;
 	    }
