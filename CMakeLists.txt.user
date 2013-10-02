@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by Qt Creator 2.4.1, 2013-09-26T11:27:05. -->
+<!-- Written by Qt Creator 2.4.1, 2013-10-02T11:26:02. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -173,7 +173,7 @@
     </valuelist>
     <value type="int" key="CMakeProjectManager.BaseEnvironmentBase">2</value>
     <value type="QString" key="CMakeProjectManager.CMakeRunConfiguation.Title">Nanopositioning_Simulator</value>
-    <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.Arguments">-p PARA</value>
+    <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.Arguments">-p PARA -b</value>
     <value type="bool" key="CMakeProjectManager.CMakeRunConfiguration.UseTerminal">false</value>
     <valuelist type="QVariantList" key="CMakeProjectManager.CMakeRunConfiguration.UserEnvironmentChanges"/>
     <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.UserWorkingDirectory"></value>

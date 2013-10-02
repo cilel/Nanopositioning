@@ -267,7 +267,7 @@ main(int argc, const char ** argv)
   std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 40;
+  int opt_niter = 400;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 5;
@@ -324,8 +324,7 @@ main(int argc, const char ** argv)
 
   wMcR.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
-  wMo.buildFrom(0*0.001*scale,-3.55*10e-3*scale,1.92167*0.01*scale,0,0,0);
-
+  wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 
 /*
   wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
@@ -339,6 +338,9 @@ main(int argc, const char ** argv)
 
   wMc = wMcR*Tr;
 
+  cout << "wMc=\n" << wMc << endl;
+
+
   cMw = wMc.inverse();
   eMo = wMe.inverse() * wMo;
   //eMo.setIdentity();
@@ -347,10 +349,14 @@ main(int argc, const char ** argv)
 
   //send_wMe(wMe,scale);//test
 
+  vpHomogeneousMatrix cModR;
+
+  cModR = wMcR.inverse()*wMo;
+
   //test
- /* vpThetaUVector R_cMod;
-   cMod.extract(R_cMod);
-   cout<< "R_cMod=" << R_cMod << endl;*/
+  vpThetaUVector R_cMod;
+   cModR.extract(R_cMod);
+   cout<< "Rot_cMod in deg=" << vpMath::deg(R_cMod[0])<< "\t"<< vpMath::deg(R_cMod[1])<< "\t"<< vpMath::deg(R_cMod[2])<<"\n";
 
   cout << "cMod=\n"<< cMod << endl;
 
@@ -373,7 +379,7 @@ main(int argc, const char ** argv)
       perror( "desired image dose not exist" );
 
 
-  if (add_noise && (nsModel == Gauss_statistic))
+  if (add_noise)
     getNoisedImage(I,I,noise_mean,noise_sdv);
 
   Id = I;
@@ -426,8 +432,8 @@ main(int argc, const char ** argv)
 
    vm.resize(6);
    vm[0]=0.000001*scale;//velocity
- //  vm[1]=0.000001*scale;//velocity
- //  vm[5]=vpMath::rad(-0.1);
+   vm[1]=0.000001*scale;//velocity
+   vm[5]=vpMath::rad(0.1);
 
     wMe =  wMe * vpExponentialMap::direct(vm,1);
     cMo = cMw * wMe * eMo ;
@@ -456,6 +462,9 @@ main(int argc, const char ** argv)
     }
     else
         perror( "current image dose not exist" );
+
+    if (add_noise)
+      getNoisedImage(I,I,noise_mean,noise_sdv);
 
 
 //  cMo.buildFrom(0.000000*scale,0.000000*scale,ZcMo,vpMath::rad(-5),vpMath::rad(5),vpMath::rad(5));
@@ -690,7 +699,9 @@ main(int argc, const char ** argv)
 
   
   double normError = 1000; // norm error = |I-I*|
+  double normError_p = 0; // previous norm error
   double threshold=0.5;
+  double convergence_threshold = 0.001;
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
 
@@ -768,6 +779,8 @@ main(int argc, const char ** argv)
 
     // compute current error
     sI.error(sId,error) ;
+
+    normError_p = normError;
 
     normError = sqrt(error.sumSquare()/error.getRows());
 
@@ -860,7 +873,7 @@ main(int argc, const char ** argv)
     graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
   }
- while(normError > threshold  && iter < opt_niter);
+ while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 10*threshold));
 //while(1) ;
 
  filecMo.close();
