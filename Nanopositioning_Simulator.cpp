@@ -228,7 +228,6 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
            diep("sendto()");
        close(s);
 
-
        vpTime::wait(500);
 
        return 0;
@@ -270,7 +269,7 @@ main(int argc, const char ** argv)
   int opt_niter = 400;
   bool add_noise = false;
   double noise_mean =0;
-  double noise_sdv = 5;
+  double noise_sdv = 15;
 
   nsModel = Gauss_dynamic;
 
@@ -278,10 +277,11 @@ main(int argc, const char ** argv)
 
   ipath = "/dev/shm/out.pgm";
   readFileFlag = "/dev/shm/flag";
-  ofstream filecMo,fileVelociy,fileResidu;
+  ofstream filecMo,fileVelociy,fileResidu,fileodMo;
   filecMo.open ("../Result/Trajectory.txt");
   fileVelociy.open("../Result/Velocity.txt");
   fileResidu.open("../Result/Residual.txt");
+  fileodMo.open("../Result/odMo.txt""");
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
@@ -289,7 +289,7 @@ main(int argc, const char ** argv)
     return (-1);
   }
 
-  double Z =0.002*scale;//0.020962*scale
+  double Z =0.00175*scale;//0.020962*scale
 
 /*
   double ZcMo = 0.0223*scale;
@@ -321,8 +321,13 @@ main(int argc, const char ** argv)
 
 
   vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr;
-
+/*
   wMcR.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
+*/
+
+  wMcR.buildFrom(0*0.001*scale,-3.55*0.001*scale,2.0962*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 
@@ -355,8 +360,29 @@ main(int argc, const char ** argv)
 
   //test
   vpThetaUVector R_cMod;
-   cModR.extract(R_cMod);
-   cout<< "Rot_cMod in deg=" << vpMath::deg(R_cMod[0])<< "\t"<< vpMath::deg(R_cMod[1])<< "\t"<< vpMath::deg(R_cMod[2])<<"\n";
+  cModR.extract(R_cMod);
+  cout<< "Rot_cMod in deg=" << vpMath::deg(R_cMod[0])<< "\t"<< vpMath::deg(R_cMod[1])<< "\t"<< vpMath::deg(R_cMod[2])<<"\n";
+
+  /*
+      cout<< "Rot_cMod in deg=" << (R_cMod[0])<< "\t"<< (R_cMod[1])<< "\t"<< (R_cMod[2])<<"\n";
+
+  vpHomogeneousMatrix M ; M =  cModR ;
+  vpHomogeneousMatrix Mx180(0,0,0,M_PI,0,0) ;
+  vpHomogeneousMatrix My180(0,0,0,0,M_PI,0) ;
+  vpHomogeneousMatrix Mz180(0,0,0,0,0,M_PI) ;
+
+  (M*Mx180).print() ; cout << endl ;
+  (M*My180).print() ; cout << endl ;
+  (M*Mz180).print() ; cout << endl ;
+
+  (M*Mx180.inverse()).print() ; cout << endl ;
+  (M*My180.inverse()).print() ; cout << endl ;
+  (M*Mz180.inverse()).print() ; cout << endl ;
+
+  R_cMod = M*Mz180 ;
+  cout<< "Rot_cMod in deg=" << vpMath::deg(R_cMod[0])<< "\t"<< vpMath::deg(R_cMod[1])<< "\t"<< vpMath::deg(R_cMod[2])<<"\n";
+
+*/
 
   cout << "cMod=\n"<< cMod << endl;
 
@@ -433,7 +459,7 @@ main(int argc, const char ** argv)
    vm.resize(6);
    vm[0]=0.000001*scale;//velocity
    vm[1]=0.000001*scale;//velocity
-   vm[5]=vpMath::rad(0.1);
+  // vm[5]=vpMath::rad(0.1);
 
     wMe =  wMe * vpExponentialMap::direct(vm,1);
     cMo = cMw * wMe * eMo ;
@@ -705,6 +731,8 @@ main(int argc, const char ** argv)
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv;
 
+  cout<< "threshold=" << threshold << endl;
+
  // vpHomogeneousMatrix edMe,edMw ;
   vpHomogeneousMatrix odMo ;
 
@@ -754,6 +782,8 @@ main(int argc, const char ** argv)
         graphy.plot(0,i,iter,TodMo[i]/scale);
     for(int i=0;i<3;i++)
         graphy.plot(1,i,iter,vpMath::deg(RodMo[i]));
+
+    fileodMo << iter << "\t" << TodMo.t() << RodMo.t() << endl;
 
     //cout<< "ZodMo=" << TodMo[2] << endl;
 
@@ -873,7 +903,7 @@ main(int argc, const char ** argv)
     graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
   }
- while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 10*threshold));
+ while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 1.5*threshold));
 //while(1) ;
 
  filecMo.close();
