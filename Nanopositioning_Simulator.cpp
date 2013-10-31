@@ -208,7 +208,7 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
     Pose_send[4]=R[1];
     Pose_send[5]=R[2];
 
-    cout << "Pose_send=\n" << Pose_send[0]<< " " << Pose_send[1]<< " " << Pose_send[2]<< " " << Pose_send[3]<< " " << Pose_send[4]<< " " << Pose_send[5] << endl;
+    cout << "Pose_send(wMe)=\n" << Pose_send[0]<< " " << Pose_send[1]<< " " << Pose_send[2]<< " " << Pose_send[3]<< " " << Pose_send[4]<< " " << Pose_send[5] << endl;
 
        struct sockaddr_in si_other;
        int s, i, slen=sizeof(si_other);
@@ -228,7 +228,7 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
            diep("sendto()");
        close(s);
 
-       vpTime::wait(500);
+       vpTime::wait(600);
 
        return 0;
 
@@ -266,10 +266,10 @@ main(int argc, const char ** argv)
   std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 400;
+  int opt_niter = 1000;
   bool add_noise = false;
   double noise_mean =0;
-  double noise_sdv = 15;
+  double noise_sdv = 10;
 
   nsModel = Gauss_dynamic;
 
@@ -289,7 +289,7 @@ main(int argc, const char ** argv)
     return (-1);
   }
 
-  double Z =0.00175*scale;//0.020962*scale
+  double Z =0.001745*scale;//0.020962*scale
 
 /*
   double ZcMo = 0.0223*scale;
@@ -320,18 +320,21 @@ main(int argc, const char ** argv)
 
 
 
-  vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr;
+  vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr,cMe;
 /*
+  //realsem
   wMcR.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 */
 
+  //perpendicular
   wMcR.buildFrom(0*0.001*scale,-3.55*0.001*scale,2.0962*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 
 /*
+  //0sem
   wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,0*0.001*scale,1.92184*0.01*scale,0,0,0);
@@ -352,7 +355,9 @@ main(int argc, const char ** argv)
 
   cMod = cMw * wMo;
 
-  //send_wMe(wMe,scale);//test
+  cMe = cMw * wMe;
+
+  send_wMe(wMe,scale);//test!! to ensure the init pose of plateform
 
   vpHomogeneousMatrix cModR;
 
@@ -404,6 +409,7 @@ main(int argc, const char ** argv)
   else
       perror( "desired image dose not exist" );
 
+  //std::cout << I << std::endl;
 
   if (add_noise)
     getNoisedImage(I,I,noise_mean,noise_sdv);
@@ -414,7 +420,9 @@ main(int argc, const char ** argv)
   Iw = Id.getWidth();
   Ih = Id.getHeight();
 
-  vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120
+ //  vpCameraParameters cam(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);//parallel parameters computed by calibration VVS 1817636/scale, 1818494/scale
+ // vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120 parallel
+  vpCameraParameters cam(12237, 12237, (int)Iw/2, (int)Ih/2);//perspective parameters computed by calibration VVS 101325, 101452
 
   // display the image
 #if defined VISP_HAVE_X11
@@ -457,17 +465,25 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
-   vm[0]=0.000001*scale;//velocity
-   vm[1]=0.000001*scale;//velocity
-  // vm[5]=vpMath::rad(0.1);
+   vm[0]=0.000005*scale;//velocity
+   //vm[1]= 0.000005*scale;//velocity
+  //vm[5]=vpMath::rad(0.1);
 
-    wMe =  wMe * vpExponentialMap::direct(vm,1);
-    cMo = cMw * wMe * eMo ;
+   // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
+
+  //  cout << "wMe_tmp=\n" <<  wMe_tmp << endl;
+
+    cMe = cMe * vpExponentialMap::direct(vm,1);
+    cMo = cMw * wMe * eMo ;   
+    wMe = wMc * cMe;
 
     cout << "vpExponentialMap::direct(vm,1)=\n" << vpExponentialMap::direct(vm,1) << endl;
 
+
     cout << "wMe_first=\n" << wMe << endl;
+    cout << "cMe_first=\n" << cMe << endl;
     cout << "cMo_first=\n" << cMo << endl;
+
 
     send_wMe(wMe,scale);
 
@@ -581,7 +597,7 @@ main(int argc, const char ** argv)
   cout << "cVw=\n" << cVw <<endl;*/
 
   vpVelocityTwistMatrix cVe; //cVo
-  cVe.buildFrom(cMw * wMe);
+  cVe.buildFrom(cMe);
   //cVo.buildFrom(cMo);
 //  cout << "cVo=\n" << cVo <<endl;
 
@@ -726,10 +742,10 @@ main(int argc, const char ** argv)
   
   double normError = 1000; // norm error = |I-I*|
   double normError_p = 0; // previous norm error
-  double threshold=0.5;
-  double convergence_threshold = 0.001;
+  double threshold=0.2;// condition of convergence
+  double convergence_threshold = 0.01;
   if(add_noise && (nsModel == Gauss_dynamic))
-      threshold += noise_sdv;
+      threshold += noise_sdv*1.414; // For gaussian noise n~N(m,d^2), E=(I+n)-(I+n')=n-n',E~N(0,2*d^2)
 
   cout<< "threshold=" << threshold << endl;
 
@@ -745,9 +761,15 @@ main(int argc, const char ** argv)
 
     cMo = cMw * wMe * eMo;
 
-    for(int m=0;m<3;m++)
-        filecMo << "\t" << cMo[m][3];
+    //cout << "cMoT: " ;
 
+    for(int m=0;m<3;m++)
+    {
+        filecMo << "\t" << cMo[m][3];
+   //     cout << "\t" << cMo[m][3];
+    }
+
+    //cout << endl;
     filecMo << endl;
 
     //  Acquire the new image
@@ -810,6 +832,9 @@ main(int argc, const char ** argv)
     // compute current error
     sI.error(sId,error) ;
 
+    if(iter == 1)
+        vpImageIo::writePNG(Idiff,"../Result/img_init.png");
+
     normError_p = normError;
 
     normError = sqrt(error.sumSquare()/error.getRows());
@@ -823,12 +848,12 @@ main(int argc, const char ** argv)
 
     // ---------- Levenberg Marquardt method --------------
     {
-      if (iter > iterGN)
+      if (normError<2+threshold)//iter > iterGN
       {
+          cout << "LM method" << endl;
         mu = 0.0001 ;
         lambda = lambdaGN;
       }
-
       // Compute the levenberg Marquartd term
       {
         H = ((mu * diagHsd) + Hsd).inverseByLU();
@@ -884,11 +909,17 @@ main(int argc, const char ** argv)
     eV[1][3]=v[1]*MU;
     eV[2][3]=v[2]*MU;
 
-    wMe = wMe * eV;
+    cMe = cMe * eV;
+
+    //wMe = wMe * eV;
+
+    cout << "wMe1_current=\n" << wMe << endl;
+
+    wMe = wMc * cMe;
 
     cout << "eV=\n" << eV << endl;
 
-    cout << "wMe_current=\n" << wMe << endl;
+    cout << "wMe2_current=\n" << wMe << endl;
 
     send_wMe(wMe,scale);
 
@@ -902,9 +933,13 @@ main(int argc, const char ** argv)
 
     graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
+   // cout << "cMoTT:" << cMo[0][3]/scale<<cMo[1][3]/scale<<cMo[2][3]/scale << endl;
+
   }
  while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 1.5*threshold));
 //while(1) ;
+
+ vpImageIo::writePNG(Idiff,"../Result/img_end.png");
 
  filecMo.close();
  cout << "===========================END==============================" << endl;
