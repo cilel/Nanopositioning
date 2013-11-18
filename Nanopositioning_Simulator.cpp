@@ -46,11 +46,14 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+
+//#include <string.h>
 
 #define PORT 1085
 #define SRV_IP "127.0.0.1"
 
-#define MU 0.04
+#define MU 0.01
 
 
 // List of allowed command line options
@@ -266,7 +269,7 @@ main(int argc, const char ** argv)
   std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 1000;
+  int opt_niter = 2000;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 10;
@@ -327,14 +330,19 @@ main(int argc, const char ** argv)
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 */
-
+/*
   //perpendicular
   wMcR.buildFrom(0*0.001*scale,-3.55*0.001*scale,2.0962*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
+*/
+  //0sem new
+  wMcR.buildFrom(0*0.001*scale,-0.13249*0.001*scale,2.62184*0.01*scale,0,0,0);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
 
 /*
-  //0sem
+  //0sem old
   wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,0*0.001*scale,1.92184*0.01*scale,0,0,0);
@@ -391,6 +399,7 @@ main(int argc, const char ** argv)
 
   cout << "cMod=\n"<< cMod << endl;
 
+
   vpImage<unsigned char> I,Id;
   filename = ipath;
   const char * filename_c = filename.c_str();
@@ -420,9 +429,17 @@ main(int argc, const char ** argv)
   Iw = Id.getWidth();
   Ih = Id.getHeight();
 
- //  vpCameraParameters cam(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);//parallel parameters computed by calibration VVS 1817636/scale, 1818494/scale
+  vpCameraParameters cam;
+
+  if(pjModel == parallel)
+        cam.initPersProjWithoutDistortion(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);
+  else
+        cam.initPersProjWithoutDistortion(44708, 44708, (int)Iw/2, (int)Ih/2);
+
+  // vpCameraParameters cam(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);//parallel parameters computed by calibration VVS 1817636/scale, 1818494/scale
  // vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120 parallel
-  vpCameraParameters cam(12237, 12237, (int)Iw/2, (int)Ih/2);//perspective parameters computed by calibration VVS 101325, 101452
+ // vpCameraParameters cam(12237, 12237, (int)Iw/2, (int)Ih/2);//perspective parameters are 12237, 12237 (focal length in Blender = 0.2mm) regularized by computed calibration VVS 101325, 101452,
+  // 24813, 24792 for focal length in Blender = 0.6mm, so the regularized perspective parameters is 44708, 44670
 
   // display the image
 #if defined VISP_HAVE_X11
@@ -465,9 +482,12 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
-   vm[0]=0.000005*scale;//velocity
-   //vm[1]= 0.000005*scale;//velocity
-  //vm[5]=vpMath::rad(0.1);
+ //  vm[0]= 0.000001*scale;//velocity
+ //  vm[1]= 0.000001*scale;//velocity
+ //  vm[2]= 0.00001*scale;
+ //  vm[3]=vpMath::rad(0);
+   vm[4]=vpMath::rad(0);
+   vm[5]=vpMath::rad(1);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
@@ -743,7 +763,7 @@ main(int argc, const char ** argv)
   double normError = 1000; // norm error = |I-I*|
   double normError_p = 0; // previous norm error
   double threshold=0.2;// condition of convergence
-  double convergence_threshold = 0.01;
+  double convergence_threshold = 0.05;
   if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv*1.414; // For gaussian noise n~N(m,d^2), E=(I+n)-(I+n')=n-n',E~N(0,2*d^2)
 
@@ -799,13 +819,19 @@ main(int argc, const char ** argv)
     odMo.extract(TodMo);
     vpThetaUVector RodMo;
     odMo.extract(RodMo);
+    vpColVector RodMoV;
+    RodMoV.resize(3);
+    for(int i=0;i<3;i++)
+        RodMoV[i]= vpMath::deg(RodMo[i]);
+
+    fileodMo << iter << "\t" << TodMo.t() << RodMoV << endl;
 
     for(int i=0;i<3;i++)
         graphy.plot(0,i,iter,TodMo[i]/scale);
     for(int i=0;i<3;i++)
         graphy.plot(1,i,iter,vpMath::deg(RodMo[i]));
 
-    fileodMo << iter << "\t" << TodMo.t() << RodMo.t() << endl;
+
 
     //cout<< "ZodMo=" << TodMo[2] << endl;
 
@@ -826,6 +852,7 @@ main(int argc, const char ** argv)
       vpDisplay::flush(Idiff) ;
     }
 #endif
+
     // Compute current visual feature
     sI.buildFrom(I) ;
 
@@ -934,6 +961,21 @@ main(int argc, const char ** argv)
     graphy2.plot(1,0,cMo[0][3]/scale,cMo[1][3]/scale,cMo[2][3]/scale);
 
    // cout << "cMoTT:" << cMo[0][3]/scale<<cMo[1][3]/scale<<cMo[2][3]/scale << endl;
+
+    /*------------Here begin to save the image for video--------*/
+
+    char img_filename_c[80];
+    sprintf(img_filename_c, "../Result/video/img_current_%d.png", iter);
+    string img_filename(img_filename_c);
+    vpImageIo::writePNG(I,img_filename);
+    sprintf(img_filename_c, "../Result/video/img_diff_%d.png", iter);
+    string img_filename_d(img_filename_c);
+    vpImageIo::writePNG(Idiff,img_filename_d);
+
+    /*-----------Here end to save the image for video---------*/
+
+ //   if(iter > 1000)
+ //       vpImageIo::writePNG(Idiff,"../Result/img_end.png");
 
   }
  while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 1.5*threshold));
