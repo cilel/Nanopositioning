@@ -53,7 +53,7 @@
 #define PORT 1085
 #define SRV_IP "127.0.0.1"
 
-#define MU 0.01
+#define MU 0.04
 
 
 // List of allowed command line options
@@ -269,7 +269,7 @@ main(int argc, const char ** argv)
   std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 2000;
+  int opt_niter = 1000;
   bool add_noise = false;
   double noise_mean =0;
   double noise_sdv = 10;
@@ -482,12 +482,12 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
- //  vm[0]= 0.000001*scale;//velocity
- //  vm[1]= 0.000001*scale;//velocity
- //  vm[2]= 0.00001*scale;
- //  vm[3]=vpMath::rad(0);
-   vm[4]=vpMath::rad(0);
-   vm[5]=vpMath::rad(1);
+ //  vm[0]= 0.000005*scale;//velocity
+//   vm[1]= 0.000005*scale;//velocity
+ //  vm[2]= 0.0001*scale;
+ //  vm[3]=vpMath::rad(0.1);
+ //  vm[4]=vpMath::rad(0);
+   vm[5]=vpMath::rad(-5);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
@@ -785,7 +785,7 @@ main(int argc, const char ** argv)
 
     for(int m=0;m<3;m++)
     {
-        filecMo << "\t" << cMo[m][3];
+        filecMo << "\t" << cMo[m][3]*1e6; //convert m to um
    //     cout << "\t" << cMo[m][3];
     }
 
@@ -819,19 +819,24 @@ main(int argc, const char ** argv)
     odMo.extract(TodMo);
     vpThetaUVector RodMo;
     odMo.extract(RodMo);
-    vpColVector RodMoV;
-    RodMoV.resize(3);
-    for(int i=0;i<3;i++)
-        RodMoV[i]= vpMath::deg(RodMo[i]);
+    vpColVector TodMoPlot;
+    TodMoPlot.resize(3);
+    vpColVector RodMoPlot;
+    RodMoPlot.resize(3);
 
-    fileodMo << iter << "\t" << TodMo.t() << RodMoV << endl;
+    /*--------Here is plot in realtime and save data for gnuplot-------*/
+    //convert m, rad to um, deg
+    for(int i=0;i<3;i++)
+        TodMoPlot[i]= TodMo[i]*1e6;
+    for(int i=0;i<3;i++)
+        RodMoPlot[i]= vpMath::deg(RodMo[i]);
+
+    fileodMo << iter << "\t" << TodMoPlot.t() << RodMoPlot.t() << endl;
 
     for(int i=0;i<3;i++)
         graphy.plot(0,i,iter,TodMo[i]/scale);
     for(int i=0;i<3;i++)
         graphy.plot(1,i,iter,vpMath::deg(RodMo[i]));
-
-
 
     //cout<< "ZodMo=" << TodMo[2] << endl;
 
@@ -914,7 +919,12 @@ main(int argc, const char ** argv)
     for(int i=0;i<3;i++)
       graphy.plot(3,i,iter,vpMath::deg(v[i+3]));
 
-    fileVelociy << iter << "\t" << v.t() << endl;
+    //convert m/s, rad/s to um/s, rad/s
+    vpColVector vPlot=v;
+      for(int i=0;i<3;i++)
+          vPlot[i]=v[i]*1e6;
+
+    fileVelociy << iter << "\t" << vPlot.t() << endl;
 
     cout << "v=" << v.t() << endl;
     cout << "lambda = " << lambda << "  mu = " << mu ;
