@@ -37,6 +37,7 @@
 #include <visp/vpPlot.h>
 
 #include <visp/vpNoise.h>
+#include <visp/vpImageConvert.h>
 #include <visp/vpExponentialMap.h>
 
 #include <sys/types.h>
@@ -107,7 +108,7 @@ OPTIONS:                                               Default\n\
   -d \n\
      Turn off the display.\n\
 \n\
-  -b\n\
+  -N\n\
      Add gauss noise to image.\n\
 \n\
   -n %%d                                               %d\n\
@@ -137,7 +138,7 @@ OPTIONS:                                               Default\n\
 
 */
 bool getOptions(int argc, const char **argv, std::string &ipath,
-                bool &click_allowed, bool &display, int &niter, bool &add_noise, double &scale)
+                bool &click_allowed, bool &display, int &niter, bool &add_noise,bool &blur, double &scale)
 {
   const char *optarg;
   int c;
@@ -148,7 +149,8 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
     case 'd': display = false; break;
     case 'i': ipath = optarg; break; 
     case 'n': niter = atoi(optarg); break;
-    case 'b': add_noise = true;  break;
+    case 'N': add_noise = true;  break;
+    case 'b': blur = true;  break;
     case 'p':
         if(!strcmp( optarg, "PERS" ))
             pjModel = perspective;
@@ -237,18 +239,18 @@ int send_wMe(vpHomogeneousMatrix wMe, double scale)
 
 }
 
-void getNoisedImage(vpImage<unsigned char> &Inoised, vpImage<unsigned char> in,double noise_mean, double noise_sdv)
+void getNoisedImage(vpImage<unsigned char> &Inoised, vpImage<unsigned char> Iin,double noise_mean, double noise_sdv)
 {
 
-    Inoised = in;
+    Inoised = Iin;
     //  Inoised.init(Itexture.getRows(),Itexture.getCols(),0);
 
            vpGaussRand noise(noise_sdv, noise_mean);
-           for(int i=0; i< in.getCols(); i++)
-               for(int j=0;j<in.getRows();j++)
+           for(int i=0; i< Iin.getCols(); i++)
+               for(int j=0;j<Iin.getRows();j++)
                {
                    double gauss = noise();
-                   double noised =(double) in[i][j] + gauss;
+                   double noised =(double) Iin[i][j] + gauss;
                    if (noised < 0)
                        Inoised[i][j] = 0;
                    else if (noised > 255)
@@ -256,6 +258,23 @@ void getNoisedImage(vpImage<unsigned char> &Inoised, vpImage<unsigned char> in,d
                    else
                        Inoised[i][j] = noised;
                }
+}
+
+void getBlurImage(vpImage<unsigned char> &Iblur, vpImage<unsigned char> Iin,double Z)
+{
+    cv::Mat I,Ib;
+    vpImageConvert::convert(Iin,I);
+    cv::Size ksize;
+    ksize.width = 5;
+    ksize.height = 5;
+    double a = 10000;
+    double standardZ = 0.007;
+    double diffZ = abs(Z - standardZ);
+    double sigmaX = diffZ * a;
+
+    cv::GaussianBlur(I, Ib, ksize, sigmaX);
+    vpImageConvert::convert(Ib,Iblur);
+
 }
 
 
@@ -271,6 +290,7 @@ main(int argc, const char ** argv)
   bool opt_display = true;
   int opt_niter = 1000;
   bool add_noise = false;
+  bool blur = false;
   double noise_mean =0;
   double noise_sdv = 10;
 
@@ -288,7 +308,7 @@ main(int argc, const char ** argv)
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
-                 opt_display, opt_niter,add_noise,scale) == false) {
+                 opt_display, opt_niter,add_noise,blur,scale) == false) {
     return (-1);
   }
 
@@ -420,8 +440,13 @@ main(int argc, const char ** argv)
 
   //std::cout << I << std::endl;
 
+  if(blur)
+      getBlurImage(I,I,cMod[2][3]);
+    cout << "cMo[2][3]=" << cMod[2][3] << endl;
   if (add_noise)
     getNoisedImage(I,I,noise_mean,noise_sdv);
+
+
 
   Id = I;
 
@@ -482,12 +507,12 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
- //  vm[0]= 0.000005*scale;//velocity
-//   vm[1]= 0.000005*scale;//velocity
- //  vm[2]= 0.0001*scale;
- //  vm[3]=vpMath::rad(0.1);
- //  vm[4]=vpMath::rad(0);
-   vm[5]=vpMath::rad(-5);
+  vm[0]= 0.000005*scale;//velocity
+ // vm[1]= 0.000005*scale;//velocity
+   vm[2]= 0.0001*scale;
+  // vm[3]=vpMath::rad(0.1);
+  // vm[4]=vpMath::rad(0.1);
+  // vm[5]=vpMath::rad(5);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
@@ -525,6 +550,9 @@ main(int argc, const char ** argv)
     else
         perror( "current image dose not exist" );
 
+    if(blur)
+        getBlurImage(I,I,cMo[2][3]);
+        cout << "cMo[2][3]=" << cMo[2][3] << endl;
     if (add_noise)
       getNoisedImage(I,I,noise_mean,noise_sdv);
 
@@ -691,7 +719,7 @@ main(int argc, const char ** argv)
   double mu ;  // mu = 0 : Gauss Newton ; mu != 0  : LM
   double lambdaGN;
 
-  mu       =  0.01;
+  mu       =  0.001;
   lambda   = 10 ;
   lambdaGN = 10;
 
@@ -840,6 +868,10 @@ main(int argc, const char ** argv)
 
     //cout<< "ZodMo=" << TodMo[2] << endl;
 
+    if(blur)
+        getBlurImage(I,I,cMo[2][3]);
+
+    cout << "cMo[2][3]=" << cMo[2][3] << endl;
     if (add_noise && nsModel == Gauss_dynamic)
         getNoisedImage(I,I,noise_mean, noise_sdv);
 
