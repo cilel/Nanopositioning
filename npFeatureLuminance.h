@@ -75,6 +75,8 @@ class VISP_EXPORT vpLuminance
   double I ; // pixel intensity
   double Ix,Iy ; // pixel gradient
   double Z; // pixel depth
+  double Ixx,Iyy ; // pixel gradient 2
+  double Ixy,Iyx ; // pixel gradient 2
 
 };
 
@@ -103,6 +105,12 @@ class VISP_EXPORT npFeatureLuminance : public vpBasicFeature
   unsigned int nbc ;
   //! Border size.
   unsigned int bord ;
+
+  //! image gradient as additional visual feature
+  vpColVector sg;
+
+  //! interaction matrix for image gradient
+  vpMatrix Lg;
   
   //! Store the image (as a vector with intensity and gradient I, Ix, Iy) 
   vpLuminance *pixInfo ;
@@ -111,13 +119,15 @@ class VISP_EXPORT npFeatureLuminance : public vpBasicFeature
  public:
   void buildFrom(vpImage<unsigned char> &I) ;
 
+  vpImage<double> imG, imIx, imIy, imGxy ;
+
 
 
 public: 
   typedef enum {
        perspective,
        parallel,
-       weakperspective
+       parallelZ
    }projectionModel;
 
   projectionModel pjModel;
@@ -148,17 +158,22 @@ public:
 
  
   vpMatrix  interaction(const unsigned int select = FEATURE_ALL);
-  void      interaction(vpMatrix &L);
+  void      interaction(vpMatrix &L );
 
   vpColVector error(const vpBasicFeature &s_star,
                     const unsigned int select = FEATURE_ALL)  ;
   void error(const vpBasicFeature &s_star,
              vpColVector &e)  ;
 
+  void sg_error(const vpColVector &sg_star,
+             vpColVector &eg)  ;
+
   void print(const unsigned int select = FEATURE_ALL ) const ;
 
   npFeatureLuminance *duplicate() const ;
 
+  vpMatrix get_Lg();
+  vpColVector get_sg();
 
   void display(const vpCameraParameters &cam,
                const vpImage<unsigned char> &I,

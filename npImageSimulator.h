@@ -75,7 +75,7 @@ class VISP_EXPORT npImageSimulator
    typedef enum {
         perspective,
         parallel,
-        weakperspective
+        parallelZ
     }projectionModel;
 
     projectionModel pjModel;

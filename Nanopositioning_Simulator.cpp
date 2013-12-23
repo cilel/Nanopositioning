@@ -58,15 +58,15 @@
 
 
 // List of allowed command line options
-#define GETOPTARGS	"cdi:n:hp:bu:"
+#define GETOPTARGS	"cdi:n:hp:bu:a"
 
 
 using namespace std;
 
 typedef enum {
      perspective,
-     parallel,
-     weakperspective
+     parallel, //donot control translation Z
+     parallelZ // control translation Z
  }projectionModel;
 
 projectionModel pjModel;
@@ -108,7 +108,7 @@ OPTIONS:                                               Default\n\
   -d \n\
      Turn off the display.\n\
 \n\
-  -N\n\
+  -a\n\
      Add gauss noise to image.\n\
 \n\
   -n %%d                                               %d\n\
@@ -149,13 +149,15 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
     case 'd': display = false; break;
     case 'i': ipath = optarg; break; 
     case 'n': niter = atoi(optarg); break;
-    case 'N': add_noise = true;  break;
+    case 'a': add_noise = true;  break;
     case 'b': blur = true;  break;
     case 'p':
         if(!strcmp( optarg, "PERS" ))
             pjModel = perspective;
         else if (!strcmp( optarg,"PARA" ))
             pjModel = parallel;
+        else if (!strcmp( optarg,"PARZ" ))
+            pjModel = parallelZ;
         else
             pjModel = perspective;
         break;
@@ -265,9 +267,9 @@ void getBlurImage(vpImage<unsigned char> &Iblur, vpImage<unsigned char> Iin,doub
     cv::Mat I,Ib;
     vpImageConvert::convert(Iin,I);
     cv::Size ksize;
-    ksize.width = 5;
-    ksize.height = 5;
-    double a = 10000;
+    ksize.width = 19;
+    ksize.height = 19;
+    double a = 1e6;
     double standardZ = 0.007;
     double diffZ = abs(Z - standardZ);
     double sigmaX = diffZ * a;
@@ -291,8 +293,8 @@ main(int argc, const char ** argv)
   int opt_niter = 1000;
   bool add_noise = false;
   bool blur = false;
-  double noise_mean =0;
-  double noise_sdv = 10;
+  double noise_mean = 0;
+  double noise_sdv = 4;
 
   nsModel = Gauss_dynamic;
 
@@ -300,11 +302,12 @@ main(int argc, const char ** argv)
 
   ipath = "/dev/shm/out.pgm";
   readFileFlag = "/dev/shm/flag";
-  ofstream filecMo,fileVelociy,fileResidu,fileodMo;
+  ofstream filecMo,fileVelociy,fileResidu,fileodMo,fileSg;
   filecMo.open ("../Result/Trajectory.txt");
   fileVelociy.open("../Result/Velocity.txt");
   fileResidu.open("../Result/Residual.txt");
   fileodMo.open("../Result/odMo.txt""");
+  fileSg.open("../Result/Sg.txt""");
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
@@ -442,11 +445,9 @@ main(int argc, const char ** argv)
 
   if(blur)
       getBlurImage(I,I,cMod[2][3]);
-    cout << "cMo[2][3]=" << cMod[2][3] << endl;
+    cout << "cMod[2][3]=" << cMod[2][3] << endl;
   if (add_noise)
     getNoisedImage(I,I,noise_mean,noise_sdv);
-
-
 
   Id = I;
 
@@ -456,7 +457,7 @@ main(int argc, const char ** argv)
 
   vpCameraParameters cam;
 
-  if(pjModel == parallel)
+  if((pjModel == parallel) || ( pjModel == parallelZ))
         cam.initPersProjWithoutDistortion(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);
   else
         cam.initPersProjWithoutDistortion(44708, 44708, (int)Iw/2, (int)Ih/2);
@@ -470,7 +471,7 @@ main(int argc, const char ** argv)
 #if defined VISP_HAVE_X11
   vpDisplayX d;
 #elif defined VISP_HAVE_GDI
-  vpDisplayGDI d;p
+  vpDisplayGDI d;
 #elif defined VISP_HAVE_GTK
   vpDisplayGTK d;
 #endif
@@ -507,20 +508,20 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
    vm.resize(6);
-  vm[0]= 0.000005*scale;//velocity
- // vm[1]= 0.000005*scale;//velocity
-   vm[2]= 0.0001*scale;
+ vm[0]= 0.000002*scale;//velocity
+ // vm[1]= 0.000002*scale;//velocity
+//   vm[2]= -0.00001*scale;
   // vm[3]=vpMath::rad(0.1);
   // vm[4]=vpMath::rad(0.1);
-  // vm[5]=vpMath::rad(5);
+  // vm[5]=vpMath::rad(2);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
   //  cout << "wMe_tmp=\n" <<  wMe_tmp << endl;
 
     cMe = cMe * vpExponentialMap::direct(vm,1);
-    cMo = cMw * wMe * eMo ;   
     wMe = wMc * cMe;
+    cMo = cMw * wMe * eMo ;
 
     cout << "vpExponentialMap::direct(vm,1)=\n" << vpExponentialMap::direct(vm,1) << endl;
 
@@ -611,26 +612,55 @@ main(int argc, const char ** argv)
   npFeatureLuminance sI ;
   if(pjModel == parallel)
     sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallel) ;
+  else if(pjModel == parallelZ)
+    sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallelZ) ;
   else
     sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
   sI.setCameraParameters(cam) ;
   sI.buildFrom(I) ;
-  
+
+  vpImage<unsigned char> Idip;
+
+#if defined VISP_HAVE_X11
+  vpDisplayX ds;
+#elif defined VISP_HAVE_GDI
+  vpDisplayGDI ds;
+#elif defined VISP_HAVE_GTK
+  vpDisplayGTK ds;
+#endif
+
+    vpImageConvert::convert(sI.imGxy,Idip);
+#if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK)
+  {
+    ds.init(Idip, 2680, 10, "Gadient") ;
+    vpDisplay::display(Idip);
+    vpDisplay::flush(Idip);
+  }
+#endif
+
 
   // desired visual feature built from the image 
   npFeatureLuminance sId ;
   if(pjModel == parallel)
     sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallel) ;
+  else if(pjModel == parallelZ)
+    sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallelZ) ;
   else
     sId.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
   sId.setCameraParameters(cam) ;
   sId.buildFrom(Id) ;
+
   
   // Matrice d'interaction, Hessien, erreur,...
   vpMatrix Lsd;   // matrice d'interaction a la position desiree
   vpMatrix Hsd;  // hessien a la position desiree
   vpMatrix H ; // Hessien utilise pour le levenberg-Marquartd
-  vpColVector error ; // Erreur I-I*
+  vpColVector error ; // Erreur I-I*, photometric information
+
+  vpMatrix Lgsd; // interaction matrix (using image gradient) of the desired position
+  vpMatrix Hgsd; // hessien of the desired position (using image gradient)
+  vpMatrix Hg;  // Hessien for  levenberg-Marquartd (using image gradient)
+  vpColVector sg_error; // error sg-sg*, image gradient
 
   // Compute the interaction matrix
   // link the variation of image intensity to camera motion
@@ -638,6 +668,10 @@ main(int argc, const char ** argv)
   // here it is computed at the desired position
   sId.interaction(Lsd) ;
   cout << "Size of Lsd:" << Lsd.getRows() << "x" << Lsd.getCols() <<endl;
+  //cout << "Lsd=\n" << Lsd <<endl;
+
+  Lgsd = sId.get_Lg();
+  cout << "Size of Lgsd:" << Lgsd.getRows() << "x" << Lgsd.getCols() <<endl;
   //cout << "Lsd=\n" << Lsd <<endl;
 
 /*  vpVelocityTwistMatrix cVw;
@@ -653,7 +687,12 @@ main(int argc, const char ** argv)
   vpMatrix Jn;// robot Jacobian
   vpMatrix diagHsd;// diag(Hsd)
 
- if(pjModel==parallel)
+  /*For parallelZ, image gradient*/
+  vpMatrix Jgs;// visual feature Jacobian
+  vpMatrix Jgn;// robot Jacobian
+  vpMatrix diagHgsd;// diag(Hsd)
+
+  if(pjModel==parallel )
   {
       Jn.resize(6,5);
       Jn[0][0]=1;
@@ -663,7 +702,6 @@ main(int argc, const char ** argv)
       Jn[5][4]=1;
 
       Js=-Lsd*cVe*Jn;
-
       //cout << "Lsd*cVw=\n" << Lsd*cVw << endl;
 
       //cout << "Jn=\n" << Jn << endl;
@@ -684,7 +722,47 @@ main(int argc, const char ** argv)
       diagHsd.eye(n);
       for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
   }
-  else //perspective
+  else if (pjModel==parallelZ)
+  {
+      Jn.resize(6,5);
+      Jn[0][0]=1;
+      Jn[1][1]=1;
+      Jn[3][2]=1;
+      Jn[4][3]=1;
+      Jn[5][4]=1;
+
+      Js=-Lsd*cVe*Jn;
+      cout << "Size of Jn:" << Jn.getRows() << "x" << Jn.getCols() <<endl;
+      cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
+
+      Jgn.resize(6,1);
+      Jgn[2][0]=1;
+      Jgs=-Lgsd*cVe*Jgn;
+
+      cout << "Size of Jgn:" << Jgn.getRows() << "x" << Jgn.getCols() <<endl;
+      cout << "Size of Jgs:" << Jgs.getRows() << "x" << Jgs.getCols() <<endl;
+
+      // Compute the Hessian H = L^TL
+      Hsd = Js.AtA() ;
+
+      Hgsd = Jgs.AtA();
+
+      cout << "Hgsd=\n" << Hgsd <<endl;
+
+      // Compute the Hessian diagonal for the Levenberg-Marquartd
+      // optimization process
+      unsigned int n = 5 ;
+      diagHsd.resize(n,n) ;
+      diagHsd.eye(n);
+      for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
+
+      diagHgsd.resize(1,1);
+      diagHsd[0][0] = Hsd[0][0];
+
+
+
+  }
+  else //perspective //or parallelZ
   {
       Jn.resize(6,6);
       Jn.setIdentity();
@@ -712,12 +790,15 @@ main(int argc, const char ** argv)
   double lambda ; //gain
   vpColVector e ;// velocity to be multiply by lamda
   vpColVector v ; // camera velocity send to the robot
+  vpColVector eg; // velocity of z axis
+  vpColVector vg ; // camera velocity of z axis
 
   // ----------------------------------------------------------
   // Minimisation
 
   double mu ;  // mu = 0 : Gauss Newton ; mu != 0  : LM
   double lambdaGN;
+  double lambdaTZ  = 50;// gain for Translation on Z : lambdaTZ*lambda
 
   mu       =  0.001;
   lambda   = 10 ;
@@ -792,14 +873,17 @@ main(int argc, const char ** argv)
   double normError_p = 0; // previous norm error
   double threshold=0.2;// condition of convergence
   double convergence_threshold = 0.05;
+
+  // For gaussian noise n~N(m,d^2), E=(I+n)-(I+n')=n-n',E~N(0,2*d^2)
   if(add_noise && (nsModel == Gauss_dynamic))
-      threshold += noise_sdv*1.414; // For gaussian noise n~N(m,d^2), E=(I+n)-(I+n')=n-n',E~N(0,2*d^2)
+      threshold += noise_sdv*1.414;
 
   cout<< "threshold=" << threshold << endl;
 
- // vpHomogeneousMatrix edMe,edMw ;
+ // vpHomogeneousMatrix edMe,e/*dMw ;
   vpHomogeneousMatrix odMo ;
 
+/******************************* Here the loop begins ************************************/
   do
   {
 
@@ -820,7 +904,7 @@ main(int argc, const char ** argv)
     //cout << endl;
     filecMo << endl;
 
-    //  Acquire the new image
+    //Acquire the new image
     //sim.setCameraPosition(cMo) ;
     //sim.getImage(I,cam) ;
 
@@ -893,8 +977,29 @@ main(int argc, const char ** argv)
     // Compute current visual feature
     sI.buildFrom(I) ;
 
+    int S_g=0; // image gradient
+    vpColVector sg = sI.get_sg();
+    int nbr_sg = sg.size();
+    cout << "nbr_sg:" << nbr_sg << endl;
+
+    for (int m=0; m<nbr_sg;m++)
+        S_g+= sg[m];
+
+    fileSg << iter << "\t" << S_g << "\t" << cMod[2][3]-cMo[2][3] << endl;
+
     // compute current error
     sI.error(sId,error) ;
+
+    if (pjModel==parallelZ)
+        sI.sg_error(sId.get_sg(),sg_error) ;
+
+    vpImageConvert::convert(sI.imGxy,Idip);
+#if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK)
+  {
+    vpDisplay::display(Idip);
+    vpDisplay::flush(Idip);
+  }
+#endif
 
     if(iter == 1)
         vpImageIo::writePNG(Idiff,"../Result/img_init.png");
@@ -932,6 +1037,16 @@ main(int argc, const char ** argv)
 
       v =  -lambda*e;
 
+      if(pjModel==parallelZ)
+      {
+          Hg = ((mu * diagHgsd) + Hgsd).inverseByLU();
+          eg = Hg * Jgs.t() * sg_error ;
+          vg =  -lambda*lambdaTZ*eg;
+
+         // cout << "vg=" << vg << endl;
+      }
+
+
     }
 
     if(pjModel==parallel)
@@ -944,6 +1059,34 @@ main(int argc, const char ** argv)
         v[2]=0;
         v[1]=vc[1];//vc[1]
         v[0]=vc[0];//vc[0]
+    }
+    else if (pjModel==parallelZ)
+    {
+
+        vpColVector vc=v;
+        v.resize(6);
+        v[5]=vc[4];
+        v[4]=vc[3];//vc[3]
+        v[3]=vc[2];//vc[2]
+        v[2]=vg[0];
+        v[1]=vc[1];//vc[1]
+        v[0]=vc[0];//vc[0]
+ /*
+        vpColVector vc=v;
+        v.resize(6);
+        v[5]=0;
+        v[4]=0;//vc[3]
+        v[3]=0;//vc[2]
+        v[2]=1e-5;
+        v[1]=0;//vc[1]
+        v[0]=0;//vc[0]
+*/
+    }
+
+    if (vpMath::equal(normError,normError_p, convergence_threshold*10) && iter > 200 && lambdaTZ < 1000)
+    {
+        lambdaTZ *= 2;
+        cout << "----------- Z begin moving --------------" << endl;
     }
 
     for(int i=0;i<3;i++)
@@ -1013,6 +1156,9 @@ main(int argc, const char ** argv)
     sprintf(img_filename_c, "../Result/video/img_diff_%d.png", iter);
     string img_filename_d(img_filename_c);
     vpImageIo::writePNG(Idiff,img_filename_d);
+    sprintf(img_filename_c, "../Result/video/img_gradient_%d.png", iter);
+    string img_filename_g(img_filename_c);
+    vpImageIo::writePNG(Idip,img_filename_g);
 
     /*-----------Here end to save the image for video---------*/
 

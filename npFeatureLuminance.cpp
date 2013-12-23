@@ -11,6 +11,12 @@
 #include <visp/vpImageFilter.h>
 #include <visp/vpException.h>
 
+#include <visp/vpDisplayGTK.h>
+#include <visp/vpDisplayGDI.h>
+#include <visp/vpDisplayOpenCV.h>
+#include <visp/vpDisplayD3D.h>
+#include <visp/vpDisplayX.h>
+
 #include "npFeatureLuminance.h"
 
 using namespace std;
@@ -61,7 +67,13 @@ npFeatureLuminance::init(unsigned int _nbr, unsigned int _nbc, double _Z, projec
   // number of feature = nb column x nb lines in the images
   dim_s = (nbr-2*bord)*(nbc-2*bord) ;
 
+  imIx.resize(nbr,nbc) ;
+  imIy.resize(nbr,nbc) ;
+  imG.resize(nbr,nbc) ;
+  imGxy.resize(nbr,nbc) ;//for display gradient
+
   s.resize(dim_s) ;
+  sg.resize(dim_s);
   
   if (pixInfo != NULL)
     delete [] pixInfo;
@@ -121,6 +133,18 @@ npFeatureLuminance::get_Z() const
     return Z ;
 }
 
+vpMatrix
+npFeatureLuminance::get_Lg()
+{
+    return Lg;
+}
+
+vpColVector
+npFeatureLuminance::get_sg()
+{
+    return sg;
+}
+
 
 void
 npFeatureLuminance::setCameraParameters(vpCameraParameters &_cam)
@@ -138,10 +162,11 @@ void
 npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 {
   unsigned int l = 0;
-  double Ix,Iy ;
+  double Ix,Iy,Ixx, Ixy, Iyx, Iyy ;
 
   double px = cam.get_px() ;
   double py = cam.get_py() ;
+
 
 
   if (firstTimeIn==0)
@@ -166,6 +191,57 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 	}
     }
 
+  //For image gradient
+
+  for (int i=3; i < nbr-3 ; i++)
+{
+  //   cout << i << endl ;
+  for (int j = 3 ; j < nbc-3; j++)
+    {
+      // cout << dim_s <<" " <<l <<"  " <<i << "  " << j <<endl ;
+      imG[i][j] =   vpImageFilter::gaussianFilter(I,i,j) ;
+    }
+}
+
+  for (int i=3; i < nbr-3 ; i++)
+{
+  //   cout << i << endl ;
+  for (int j = 3 ; j < nbc-3; j++)
+    {
+      // cout << dim_s <<" " <<l <<"  " <<i << "  " << j <<endl ;
+      imIx[i][j] =   vpImageFilter::derivativeFilterX(imG,i,j) ;
+      imIy[i][j] =   vpImageFilter::derivativeFilterY(imG,i,j) ;
+    }
+}
+
+  l= 0 ;
+  for (int i=bord; i < nbr-bord ; i++)
+{
+  //   cout << i << endl ;
+  for (int j = bord ; j < nbc-bord; j++)
+    {
+      // cout << dim_s <<" " <<l <<"  " <<i << "  " << j <<endl ;
+      Ix =  imIx[i][j] ;
+      Iy =  imIy[i][j] ;
+
+      sg[l] = ( vpMath::sqr(Ix) + vpMath::sqr(Iy) ) ;//sqrt
+      imGxy[i][j] = sqrt( vpMath::sqr(Ix) + vpMath::sqr(Iy) ) ;
+      Ixx =  vpImageFilter::derivativeFilterX(imIx,i,j) ;
+      Ixy =  vpImageFilter::derivativeFilterY(imIx,i,j) ;
+      Iyx =  vpImageFilter::derivativeFilterX(imIy,i,j) ;
+      Iyy =  vpImageFilter::derivativeFilterY(imIy,i,j) ;
+
+      // Calcul de Z
+      pixInfo[l].Ixx  = Ixx;
+      pixInfo[l].Ixy  = Ixy;
+      pixInfo[l].Iyx  = Iyx;
+      pixInfo[l].Iyy  = Iyy;
+
+      l++;
+    }
+}
+
+  //For luminance
   l= 0 ;
   for (unsigned int i=bord; i < nbr-bord ; i++)
     {
@@ -173,7 +249,7 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
       for (unsigned int j = bord ; j < nbc-bord; j++)
 	{
 	  // cout << dim_s <<" " <<l <<"  " <<i << "  " << j <<endl ;
-          Ix =  px * vpImageFilter::derivativeFilterX(I,i,j) ;
+      Ix =  px * vpImageFilter::derivativeFilterX(I,i,j) ;
 	  Iy =  py * vpImageFilter::derivativeFilterY(I,i,j) ;
 	  
 	  // Calcul de Z
@@ -182,14 +258,13 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 	  s[l]  =  I[i][j] ;
 	  pixInfo[l].Ix  = Ix;
 	  pixInfo[l].Iy  = Iy;
+
 	  
 	  l++;
 	}
     }
 
 }
-
-
 
 
 /*!
@@ -202,8 +277,7 @@ npFeatureLuminance::interaction(vpMatrix &L)
 {
   double x,y,Ix,Iy,z,Zinv;
 
-
-
+  double Ixx, Ixy, Iyx, Iyy;
 
   if(pjModel==perspective)
   {
@@ -246,11 +320,49 @@ npFeatureLuminance::interaction(vpMatrix &L)
             L[m][3] = Ix * z;
             L[m][4]  = Iy*x-Ix*y;*/
 
-            L[m][2] = 0;
+            L[m][2] =  0 ;
             L[m][3] = -Iy * z;
             L[m][4] = Ix * z;
             L[m][5]  = Iy*x-Ix*y;
           }
+      }
+    }
+  else if(pjModel==parallelZ)
+  {
+        L.resize(dim_s,6) ;
+        Lg.resize(dim_s,6);
+      for(unsigned int m = 0; m< L.getRows(); m++)
+      {
+          Ix = pixInfo[m].Ix;
+          Iy = pixInfo[m].Iy;
+
+          x = pixInfo[m].x ;
+          y = pixInfo[m].y ;
+          z = pixInfo[m].Z;
+
+          Ixx = pixInfo[m].Ixx;
+          Ixy = pixInfo[m].Ixy;
+          Iyx = pixInfo[m].Iyx;
+          Iyy = pixInfo[m].Iyy;
+
+          double A = -( Ixx*Ix+Iyx*Iy );
+          double B = -( Ixy*Ix+Iyy*Iy );
+
+          {
+            L[m][0] = Ix;
+            L[m][1] = Iy ;
+            L[m][2] = 0;//(A+B);
+            L[m][3] = -Iy * z;
+            L[m][4] = Ix * z;
+            L[m][5]  = Iy*x-Ix*y;
+          }
+          Lg[m][0] = 0;
+          Lg[m][1] = 0;
+          Lg[m][2] = (A+B);
+          Lg[m][3] = 0;
+          Lg[m][4] = 0;
+          Lg[m][5] = 0;
+
       }
     }
   else
@@ -282,6 +394,7 @@ npFeatureLuminance::interaction(vpMatrix &L)
   Compute and return the interaction matrix \f$ L_I \f$. The computation is made
   thanks to the values of the luminance features \f$ I \f$
 */
+
 vpMatrix  npFeatureLuminance::interaction(const unsigned int /* select */)
 {
   /* static */ vpMatrix L  ; // warning C4640: 'L' : construction of local static object is not thread-safe
@@ -306,6 +419,24 @@ npFeatureLuminance::error(const vpBasicFeature &s_star,
   for (unsigned int i =0 ; i < dim_s ; i++)
     {
       e[i] = s[i] - s_star[i] ;
+    }
+}
+
+/*!
+  Compute the error \f$ (I-I^*)\f$ between the current and the desired image gradient
+
+  \param s_star : Desired visual feature.
+  \param e : Error between the current and the desired features.
+*/
+void
+npFeatureLuminance::sg_error(const vpColVector &sg_star,
+              vpColVector &eg)
+{
+  eg.resize(dim_s) ;
+
+  for (unsigned int i =0 ; i < dim_s ; i++)
+    {
+      eg[i] = sg[i] - sg_star[i] ;
     }
 }
 

@@ -185,7 +185,7 @@ npImageSimulator::getImage(vpImage<unsigned char> &I, //to be modified
       {
         double x=0,y=0;
         ip.set_ij(i,j);
-        if(pjModel==parallel)
+        if((pjModel==parallel)||(pjModel==parallelZ))
         {
             // coordinates in meters on image plane of ip
             x=(ip.get_u()-cam.get_u0())*cam.get_px_inverse();//(ip.get_u()-cam.get_u0())*cam.get_px_inverse();
@@ -1420,11 +1420,11 @@ npImageSimulator::cameraProjection(vpPoint &pt,const vpHomogeneousMatrix &cMo,do
                 //cout << "pt.p[0]="<< pt.p[0] << " pt.p[1]=" << pt.p[1] << endl;
                 break;
             }
-            //weak perspective projection
-            case weakperspective:
+            // parallel projection with motion on Z
+            case parallelZ:
             {
-                pt.p[0] = pt.cP[0]/Z0;
-                pt.p[1] = pt.cP[1]/Z0;
+                pt.p[0] = pt.cP[0];
+                pt.p[1] = pt.cP[1];
                 //pt.p[2] = 1;
                 break;
             }
@@ -1542,7 +1542,7 @@ npImageSimulator::setCameraPosition(const vpHomogeneousMatrix &_cMt)
     vpImagePoint iPa[4];
     for(unsigned int i = 0; i < 4; i++)
     {
-        if(pjModel==parallel)
+        if((pjModel==parallel)||(pjModel==parallelZ))
         {
             iPa[i].set_j(X2[i][0]);//
             //cout << "X2[" << i << "]=" << X2[i][0] << " " << X2[i][1] << " " << X2[i][2] << endl;
@@ -1750,7 +1750,7 @@ npImageSimulator::getPixel(const vpImagePoint &iP, unsigned char &Ipixelplan)
   //methoed algebrique
   double z;
 
-  if(pjModel==parallel)
+  if((pjModel==parallel)||(pjModel==parallelZ))
   {
       Xinter_optim[0]=iP.get_u();
       Xinter_optim[1]=iP.get_v();
@@ -1863,7 +1863,7 @@ npImageSimulator::getPixel(const vpImagePoint &iP, vpRGBa &Ipixelplan)// to be m
   double z;
 
   //calcul coordonnees 3D intersection
-  if(pjModel==parallel)
+  if((pjModel==parallel)||(pjModel==parallel))
   {
       Xinter_optim[0]=iP.get_u();
       Xinter_optim[1]=iP.get_v();
@@ -2029,7 +2029,7 @@ npImageSimulator::getRoi(const unsigned int &Iwidth,
   for( int i = 0; i < 4; i++)
   {
     double u=0,v=0;// coordinates of 4 points (which give the region of interest) in image plane
-    if(pjModel==parallel)
+    if((pjModel==parallel)||(pjModel==parallel))
     {
         u=point[i].cP[0]*cam.get_px()+cam.get_u0();//
         v=point[i].cP[1]*cam.get_py()+cam.get_v0();//
