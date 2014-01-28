@@ -162,7 +162,13 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
             pjModel = perspective;
         break;
     case 'u':
-        if(!strcmp( optarg, "mm" ))
+        if(!strcmp( optarg,"m" ))
+            scale = 1;
+        else if (!strcmp( optarg, "dm" ))
+            scale = 10;
+        else if (!strcmp( optarg,"cm" ))
+            scale = 100;
+        else if (!strcmp( optarg,"mm" ))
             scale = 1000;
         else if (!strcmp( optarg,"um" ))
             scale = 1000000;
@@ -189,7 +195,7 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
   return true;
 }
 
-void diep(char *s)
+void diep(const char *s)
   {
     perror(s);
     exit(1);
@@ -270,7 +276,7 @@ void getBlurImage(vpImage<unsigned char> &Iblur, vpImage<unsigned char> Iin,doub
     ksize.width = 19;
     ksize.height = 19;
     double a = 1e6;
-    double standardZ = 0.007;
+    double standardZ = 0.007; // should be changed when Z (cMo[2][3]) changes
     double diffZ = abs(Z - standardZ);
     double sigmaX = diffZ * a;
 
@@ -309,13 +315,70 @@ main(int argc, const char ** argv)
   fileodMo.open("../Result/odMo.txt""");
   fileSg.open("../Result/Sg.txt""");
 
+  //test-----------------------------------------------------------
+/*
+  vpHomogeneousMatrix mdcMo, mdwMo, mdwMc, mdTr;
+  mdcMo.resize(4,4);
+
+  mdcMo[0][0]=0.02847823517 ;
+  mdcMo[0][1]=0.9582422756;
+  mdcMo[0][2]= -0.284535993;
+  mdcMo[0][3]=-3.676356648  ;
+  mdcMo[1][0]=-0.9988781821;
+  mdcMo[1][1]=0.03805426687;
+  mdcMo[1][2]=0.02818244337;
+  mdcMo[1][3]=5.221864745;
+  mdcMo[2][0]=0.03783341727;
+  mdcMo[2][1]=0.2834142092;
+  mdcMo[2][2]=0.9582510207;
+  mdcMo[2][3]=136.599819;
+  mdcMo[3][0]=0;
+  mdcMo[3][1]=0;
+  mdcMo[3][2]=0;
+  mdcMo[3][3]=1;
+
+  mdcMo[0][0]=0.9636251428;
+  mdcMo[0][1]=-0.02765467202;
+  mdcMo[0][2]=-0.2658228795;
+  mdcMo[0][3]=-2.569881888  ;
+  mdcMo[1][0]=0.03823916077;
+  mdcMo[1][1]=0.9986651107;
+  mdcMo[1][2]=0.03472410154;
+  mdcMo[1][3]=-0.7427281339;
+  mdcMo[2][0]=0.2645077517;
+  mdcMo[2][1]=0.9633963014 ;
+  mdcMo[2][2]=0.9582510207;
+  mdcMo[2][3]=116.3720561;
+  mdcMo[3][0]=0;
+  mdcMo[3][1]=0;
+  mdcMo[3][2]=0;
+  mdcMo[3][3]=1;
+
+  //mdwMo.buildFrom(0,0,0.01672,0,0,0);
+
+  mdTr.buildFrom(0,0,0,0,0,vpMath::rad(90));
+
+  //mdcMo = mdTr*mdcMo;
+
+  //mdwMc = mdwMo*mdcMo.inverse();
+
+
+  vpThetaUVector mR;
+  vpTranslationVector mT;
+  mdcMo.extract(mR);
+  mdcMo.extract(mT);
+
+  cout << "mdcMo:\n" << mdcMo << endl;
+  cout  << "R:"<< mR << "\n" << "T:" << mT << endl;*/
+ //test-----------------------------------------------------------
+
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
                  opt_display, opt_niter,add_noise,blur,scale) == false) {
     return (-1);
   }
 
-  double Z =0.001745*scale;//0.020962*scale
+  double Z = 0.1; // 0.02300; //0.001745*scale;//0.020962*scale
 
 /*
   double ZcMo = 0.0223*scale;
@@ -359,17 +422,36 @@ main(int argc, const char ** argv)
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 */
+/*
   //0sem new
   wMcR.buildFrom(0*0.001*scale,-0.13249*0.001*scale,2.62184*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
-
+*/
 /*
   //0sem old
   wMcR.buildFrom(0*0.001*scale,0*0.001*scale,2.62184*0.01*scale,0,0,0);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,0*0.001*scale,1.92184*0.01*scale,0,0,0);
 */
+/*
+  //perspective camera (simulation of optic microscope) with 30deg rotation around x axis
+  wMcR.buildFrom(0*0.001*scale,-11.6795*0.001*scale,3.92167*0.01*scale,0.524,0,0);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
+*/
+/*
+  // usb camera
+  wMcR.buildFrom(-10.1764*0.001*scale,12.6935*0.001*scale,10.672*0.01*scale,0.1,-0.151,-1.525);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.672*0.01*scale,0,0,0);
+ */
+
+  //camera usb
+  wMcR.buildFrom(0*0.001*scale,-0.13249*0.001*scale,10.672*0.01*scale,0,0,0);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
+
   cout << "scale=" << scale << endl;
   cout << "wMe_desired=\n" << wMe << endl;
 
@@ -455,14 +537,19 @@ main(int argc, const char ** argv)
   Iw = Id.getWidth();
   Ih = Id.getHeight();
 
+  //nomally one
   vpCameraParameters cam;
-
-  if((pjModel == parallel) || ( pjModel == parallelZ))
+ /* if((pjModel == parallel) || ( pjModel == parallelZ))
         cam.initPersProjWithoutDistortion(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);
   else
         cam.initPersProjWithoutDistortion(44708, 44708, (int)Iw/2, (int)Ih/2);
+*/
+  cam.initPersProjWithoutDistortion(4800, 4800, (int)Iw/2, (int)Ih/2);// camera usb in simulation
+ // cam.initPersProjWithoutDistortion(100000, 100000, (int)Iw/2, (int)Ih/2);// camera usb in simulation
 
-  // vpCameraParameters cam(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);//parallel parameters computed by calibration VVS 1817636/scale, 1818494/scale
+//  vpCameraParameters cam(4011, 3927, (int)Iw/2, (int)Ih/2);//perspective camera with 30deg rotaion around x axis, focal length in Blender = 0.25mm
+
+//   vpCameraParameters cam(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);//parallel parameters computed by calibration VVS 1817636/scale, 1818494/scale
  // vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120 parallel
  // vpCameraParameters cam(12237, 12237, (int)Iw/2, (int)Ih/2);//perspective parameters are 12237, 12237 (focal length in Blender = 0.2mm) regularized by computed calibration VVS 101325, 101452,
   // 24813, 24792 for focal length in Blender = 0.6mm, so the regularized perspective parameters is 44708, 44670
@@ -507,13 +594,13 @@ main(int argc, const char ** argv)
    vm[4]=Rv[1];
    vm[5]=Rv[2];*/
 
-   vm.resize(6);
- vm[0]= 0.000002*scale;//velocity
- // vm[1]= 0.000002*scale;//velocity
-//   vm[2]= -0.00001*scale;
-  // vm[3]=vpMath::rad(0.1);
-  // vm[4]=vpMath::rad(0.1);
-  // vm[5]=vpMath::rad(2);
+  vm.resize(6);
+  vm[0]= 0.0002*scale;//velocity
+ // vm[1]= 0.0002*scale;//velocity
+//  vm[2]= 0.001*scale;
+//  vm[3]=vpMath::rad(1);
+ // vm[4]=vpMath::rad(1);
+//  vm[5]=vpMath::rad(-3);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
@@ -1017,12 +1104,12 @@ main(int argc, const char ** argv)
 
     // ---------- Levenberg Marquardt method --------------
     {
-      if (normError<2+threshold)//iter > iterGN
+     /* if (normError<2+threshold)//iter > iterGN
       {
           cout << "LM method" << endl;
         mu = 0.0001 ;
         lambda = lambdaGN;
-      }
+      }*/
       // Compute the levenberg Marquartd term
       {
         H = ((mu * diagHsd) + Hsd).inverseByLU();
@@ -1085,7 +1172,7 @@ main(int argc, const char ** argv)
 
     if (vpMath::equal(normError,normError_p, convergence_threshold*10) && iter > 200 && lambdaTZ < 1000)
     {
-        lambdaTZ *= 2;
+        //lambdaTZ *= 2;
         cout << "----------- Z begin moving --------------" << endl;
     }
 
