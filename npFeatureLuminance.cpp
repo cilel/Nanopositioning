@@ -78,7 +78,7 @@ npFeatureLuminance::init(unsigned int _nbr, unsigned int _nbc, double _Z, projec
   if (pixInfo != NULL)
     delete [] pixInfo;
 
-  pixInfo = new vpLuminance[dim_s] ;
+  pixInfo = new npLuminance[dim_s] ;
   
   Z = _Z ;
   pjModel = projModel;
@@ -191,7 +191,7 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
 	}
     }
 
-  //For image gradient
+  //For image gradient Laplacian
 
   for (int i=3; i < nbr-3 ; i++)
 {
@@ -240,6 +240,27 @@ npFeatureLuminance::buildFrom(vpImage<unsigned char> &I)
       l++;
     }
 }
+
+
+  //For Normalized variance
+  double sum=0;
+  double mean;
+  for (unsigned int i=bord; i < nbr-bord ; i++)
+      for (unsigned j=bord; j < nbc-bord ; j++)
+  {
+        sum +=I[i][j];
+  }
+
+  mean = sum/(nbr*nbc);
+
+  for (unsigned int i=0; i < nbr ; i++)
+      for (unsigned int j=0; j< nbc ; j++)
+  {
+        pixInfo[l].norVar = (I[i][j]-mean);
+        l++;
+  }
+
+
 
   //For luminance
   l= 0 ;
@@ -348,6 +369,8 @@ npFeatureLuminance::interaction(vpMatrix &L)
           double A = -( Ixx*Ix+Iyx*Iy );
           double B = -( Ixy*Ix+Iyy*Iy );
 
+          double C= -( Ix+Iy )*pixInfo[m].norVar;
+
           {
             L[m][0] = Ix;
             L[m][1] = Iy ;
@@ -356,12 +379,25 @@ npFeatureLuminance::interaction(vpMatrix &L)
             L[m][4] = Ix * z;
             L[m][5]  = Iy*x-Ix*y;
           }
-          Lg[m][0] = 0;
-          Lg[m][1] = 0;
-          Lg[m][2] = (A+B);
-          Lg[m][3] = 0;
-          Lg[m][4] = 0;
-          Lg[m][5] = 0;
+
+          if(vf_Z==Laplacian)
+          {
+              Lg[m][0] = 0;
+              Lg[m][1] = 0;
+              Lg[m][2] = (A+B);
+              Lg[m][3] = 0;
+              Lg[m][4] = 0;
+              Lg[m][5] = 0;
+          }
+          else if(vf_Z==NormalizedVariance)
+          {
+              Lg[m][0] = 0;
+              Lg[m][1] = 0;
+              Lg[m][2] = C;
+              Lg[m][3] = 0;
+              Lg[m][4] = 0;
+              Lg[m][5] = 0;
+          }
 
       }
     }

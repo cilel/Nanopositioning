@@ -68,7 +68,7 @@
 */
 
 
-class VISP_EXPORT vpLuminance
+class VISP_EXPORT npLuminance
 {
  public:
   double x, y;   // point coordinates (in meter)
@@ -77,6 +77,8 @@ class VISP_EXPORT vpLuminance
   double Z; // pixel depth
   double Ixx,Iyy ; // pixel gradient 2
   double Ixy,Iyx ; // pixel gradient 2
+
+  double norVar; //normalized Variance
 
 };
 
@@ -113,7 +115,7 @@ class VISP_EXPORT npFeatureLuminance : public vpBasicFeature
   vpMatrix Lg;
   
   //! Store the image (as a vector with intensity and gradient I, Ix, Iy) 
-  vpLuminance *pixInfo ;
+  npLuminance *pixInfo ;
   int  firstTimeIn  ;
 
  public:
@@ -131,6 +133,15 @@ public:
    }projectionModel;
 
   projectionModel pjModel;
+
+public:
+  typedef enum {
+       Laplacian,
+       NormalizedVariance
+   }visualFeature_Z;
+
+  visualFeature_Z vf_Z;
+
 
   void init() ;
   void init(unsigned int _nbr, unsigned int _nbc, double _Z, projectionModel projModel) ;

@@ -58,7 +58,7 @@
 
 
 // List of allowed command line options
-#define GETOPTARGS	"cdi:n:hp:bu:a"
+#define GETOPTARGS	"cdi:n:hp:bu:af"
 
 
 using namespace std;
@@ -138,7 +138,7 @@ OPTIONS:                                               Default\n\
 
 */
 bool getOptions(int argc, const char **argv, std::string &ipath,
-                bool &click_allowed, bool &display, int &niter, bool &add_noise,bool &blur, double &scale)
+                bool &click_allowed, bool &display, int &niter, bool &add_noise,bool &blur, bool &denoise, double &scale)
 {
   const char *optarg;
   int c;
@@ -151,6 +151,7 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
     case 'n': niter = atoi(optarg); break;
     case 'a': add_noise = true;  break;
     case 'b': blur = true;  break;
+    case 'f': denoise = true;  break;
     case 'p':
         if(!strcmp( optarg, "PERS" ))
             pjModel = perspective;
@@ -162,9 +163,7 @@ bool getOptions(int argc, const char **argv, std::string &ipath,
             pjModel = perspective;
         break;
     case 'u':
-        if(!strcmp( optarg,"m" ))
-            scale = 1;
-        else if (!strcmp( optarg, "dm" ))
+        if(!strcmp( optarg, "dm" ))
             scale = 10;
         else if (!strcmp( optarg,"cm" ))
             scale = 100;
@@ -268,20 +267,78 @@ void getNoisedImage(vpImage<unsigned char> &Inoised, vpImage<unsigned char> Iin,
                }
 }
 
-void getBlurImage(vpImage<unsigned char> &Iblur, vpImage<unsigned char> Iin,double Z)
+void getBlurImage(vpImage<unsigned char> &Iblur, vpImage<unsigned char> Iin, double standardZ, double Z)
 {
     cv::Mat I,Ib;
     vpImageConvert::convert(Iin,I);
     cv::Size ksize;
-    ksize.width = 19;
-    ksize.height = 19;
+    ksize.width = 9;
+    ksize.height = 9;
     double a = 1e6;
-    double standardZ = 0.007; // should be changed when Z (cMo[2][3]) changes
-    double diffZ = abs(Z - standardZ);
-    double sigmaX = diffZ * a;
-
-    cv::GaussianBlur(I, Ib, ksize, sigmaX);
+   // double standardZ = 0.20; // should be changed when Z (cMo[2][3]) changes
+    if (Z == standardZ)
+        Ib=I;
+    else
+    {
+        double diffZ = fabs(Z - standardZ);
+        double sigmaX = diffZ * a;
+        cv::GaussianBlur(I, Ib, ksize,sigmaX);
+    }
     vpImageConvert::convert(Ib,Iblur);
+
+}
+
+void getFilteredImage(vpImage<unsigned char> &Iout, vpImage<unsigned char> Iin)
+{
+    cv::Mat Ii,Io;
+    vpImageConvert::convert(Iin,Ii);
+    cv::medianBlur(Ii, Io, 3);
+
+  /*  cv::Size ksize;
+    ksize.width = 9;
+    ksize.height = 9;
+    cv::GaussianBlur(Io, Io, ksize, 0.5);*/
+    vpImageConvert::convert(Io,Iout);
+}
+
+void computeLaplacian(std::string path,int N, projectionModel pjModel, vpCameraParameters cam, double Z)//just to compute laplacian
+{
+    vpImage<unsigned char> I;
+    string filepath;
+
+    filepath = path  + "0.png";
+    vpImageIo::readPNG(I,filepath);
+
+    ofstream fileLaplacian;
+    fileLaplacian.open ("../Result/Laplacian.txt");
+
+
+    npFeatureLuminance sI ;
+    if(pjModel == parallel)
+      sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallel) ;
+    else if(pjModel == parallelZ)
+      sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::parallelZ) ;
+    else
+      sI.init( I.getHeight(), I.getWidth(), Z, npFeatureLuminance::perspective) ;
+    sI.setCameraParameters(cam) ;
+
+    for (int n=0;n<=N;n++)
+    {
+        ostringstream s;
+        s<<n;
+        filepath = path  + s.str() + ".png";
+        vpImageIo::readPNG(I,filepath);
+        sI.buildFrom(I) ;
+        int S_g=0; // image laplacian
+        vpColVector sg = sI.get_sg();
+        int nbr_sg = sg.size();
+        //cout << "nbr_sg:" << nbr_sg << endl;
+
+        for (int m=0; m<nbr_sg;m++)
+            S_g+= sg[m];
+        fileLaplacian << n << "\t" << S_g << endl;
+    }
+fileLaplacian.close();
 
 }
 
@@ -296,11 +353,12 @@ main(int argc, const char ** argv)
   std::string readFileFlag;
   bool opt_click_allowed = true;
   bool opt_display = true;
-  int opt_niter = 1000;
+  int opt_niter = 4000;
   bool add_noise = false;
   bool blur = false;
+  bool denoise = false;
   double noise_mean = 0;
-  double noise_sdv = 4;
+  double noise_sdv = 2;
 
   nsModel = Gauss_dynamic;
 
@@ -316,7 +374,7 @@ main(int argc, const char ** argv)
   fileSg.open("../Result/Sg.txt""");
 
   //test-----------------------------------------------------------
-/*
+/*standardZ
   vpHomogeneousMatrix mdcMo, mdwMo, mdwMc, mdTr;
   mdcMo.resize(4,4);
 
@@ -342,7 +400,7 @@ main(int argc, const char ** argv)
   mdcMo[0][2]=-0.2658228795;
   mdcMo[0][3]=-2.569881888  ;
   mdcMo[1][0]=0.03823916077;
-  mdcMo[1][1]=0.9986651107;
+  mdcMo[1][1]=0.9986651107;standardZ
   mdcMo[1][2]=0.03472410154;
   mdcMo[1][3]=-0.7427281339;
   mdcMo[2][0]=0.2645077517;
@@ -355,7 +413,9 @@ main(int argc, const char ** argv)
   mdcMo[3][3]=1;
 
   //mdwMo.buildFrom(0,0,0.01672,0,0,0);
-
+    double diffZ = fabs(Z - standardZ);
+    double sigmaX = diffZ * a;
+    cv::GaussianBlur(I, Ib, ksize,sigmaX);
   mdTr.buildFrom(0,0,0,0,0,vpMath::rad(90));
 
   //mdcMo = mdTr*mdcMo;
@@ -369,16 +429,16 @@ main(int argc, const char ** argv)
   mdcMo.extract(mT);
 
   cout << "mdcMo:\n" << mdcMo << endl;
-  cout  << "R:"<< mR << "\n" << "T:" << mT << endl;*/
+  cout  << "R:"<< mR << "\n" << "T:" <standardZ< mT << endl;*/
  //test-----------------------------------------------------------
 
   // Read the command line options
   if (getOptions(argc, argv, opt_ipath, opt_click_allowed,
-                 opt_display, opt_niter,add_noise,blur,scale) == false) {
+                 opt_display, opt_niter,add_noise,blur,denoise,scale) == false) {
     return (-1);
   }
 
-  double Z = 0.1; // 0.02300; //0.001745*scale;//0.020962*scale
+  double Z = 0.2; // 0.02300; //0.001745*scale;//0.020962*scale
 
 /*
   double ZcMo = 0.0223*scale;
@@ -386,7 +446,9 @@ main(int argc, const char ** argv)
 
   if ((ZcMo-Z)==0)
   {
-      cout << "ZcMo and Z should be different." << endl;
+      cout << "ZcMo and Z should be different." << endl;    double diffZ = fabs(Z - standardZ);
+    double sigmaX = diffZ * a;
+    cv::GaussianBlur(I, Ib, ksize,sigmaX);
       return 0;
   }*/
 
@@ -407,13 +469,13 @@ main(int argc, const char ** argv)
     exit(-1);
   }
 
-
-
   vpHomogeneousMatrix cMo,cMod,wMe,eMo,cMw,wMcR,wMc,wMo,Tr,cMe;
 /*
   //realsem
   wMcR.buildFrom(0.37205*0.001*scale,-3.4779*0.001*scale,2.0962*0.01*scale,0.201,-0.036,1.962);
-  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
+  wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.    double diffZ = fabs(Z - standardZ);
+    double sigmaX = diffZ * a;
+    cv::GaussianBlur(I, Ib, ksize,sigmaX);01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-3.55*0.001*scale,1.92167*0.01*scale,0,0,0);
 */
 /*
@@ -441,26 +503,26 @@ main(int argc, const char ** argv)
   wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
 */
 /*
-  // usb camera
+  // usb camera    double diffZ = fabs(Z - standardZ);
+    double sigmaX = diffZ * a;
+    cv::GaussianBlur(I, Ib, ksize,sigmaX);
   wMcR.buildFrom(-10.1764*0.001*scale,12.6935*0.001*scale,10.672*0.01*scale,0.1,-0.151,-1.525);
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
   wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.672*0.01*scale,0,0,0);
  */
 
   //camera usb
-  wMcR.buildFrom(0*0.001*scale,-0.13249*0.001*scale,10.672*0.01*scale,0,0,0);
+  wMcR.buildFrom(0.00*0.001*scale,-0.13249*0.001*scale,20.672*0.01*scale,vpMath::rad(0),vpMath::rad(0),vpMath::rad(0));
   wMe.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.2293*0.01*scale,0,0,0);
-  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.92184*0.01*scale,0,0,0);
+  wMo.buildFrom(0*0.001*scale,-0.13249*0.001*scale,1.762*0.01*scale,0,0,0);
 
   cout << "scale=" << scale << endl;
   cout << "wMe_desired=\n" << wMe << endl;
 
   Tr.buildFrom(0,0,0,vpMath::rad(180),0,0);
-
   wMc = wMcR*Tr;
 
   cout << "wMc=\n" << wMc << endl;
-
 
   cMw = wMc.inverse();
   eMo = wMe.inverse() * wMo;
@@ -484,7 +546,7 @@ main(int argc, const char ** argv)
   /*
       cout<< "Rot_cMod in deg=" << (R_cMod[0])<< "\t"<< (R_cMod[1])<< "\t"<< (R_cMod[2])<<"\n";
 
-  vpHomogeneousMatrix M ; M =  cModR ;
+  vpHomogeneousMatrix M 10; M =  cModR ;
   vpHomogeneousMatrix Mx180(0,0,0,M_PI,0,0) ;
   vpHomogeneousMatrix My180(0,0,0,0,M_PI,0) ;
   vpHomogeneousMatrix Mz180(0,0,0,0,0,M_PI) ;
@@ -512,7 +574,7 @@ main(int argc, const char ** argv)
   if( remove( readFileFlag.c_str()) != 0 )
         perror( "Error deleting image file" );
 
-  vpTime::wait(100);
+  vpTime::wait(50);
 
   if(ifstream(filename_c))
   {
@@ -526,10 +588,13 @@ main(int argc, const char ** argv)
   //std::cout << I << std::endl;
 
   if(blur)
-      getBlurImage(I,I,cMod[2][3]);
+      getBlurImage(I,I,cMod[2][3],cMod[2][3]);
     cout << "cMod[2][3]=" << cMod[2][3] << endl;
   if (add_noise)
     getNoisedImage(I,I,noise_mean,noise_sdv);
+
+  if(denoise)
+      getFilteredImage(I,I);
 
   Id = I;
 
@@ -539,13 +604,13 @@ main(int argc, const char ** argv)
 
   //nomally one
   vpCameraParameters cam;
- /* if((pjModel == parallel) || ( pjModel == parallelZ))
-        cam.initPersProjWithoutDistortion(1817636/scale, 1818494/scale, (int)Iw/2, (int)Ih/2);
+  if((pjModel == parallel) || ( pjModel == parallelZ))
+        cam.initPersProjWithoutDistortion(100000, 100000, (int)Iw/2,(int)Ih/2);// camera usb in simulation
   else
-        cam.initPersProjWithoutDistortion(44708, 44708, (int)Iw/2, (int)Ih/2);
-*/
-  cam.initPersProjWithoutDistortion(4800, 4800, (int)Iw/2, (int)Ih/2);// camera usb in simulation
- // cam.initPersProjWithoutDistortion(100000, 100000, (int)Iw/2, (int)Ih/2);// camera usb in simulation
+        cam.initPersProjWithoutDistortion(4000, 4000, (int)Iw/2, (int)Ih/2);// camera usb in simulation
+
+  //cam.initPersProjWithoutDistortion(4000, 4000, (int)Iw/2, (int)Ih/2);// camera usb in simulation
+ //cam.initPersProjWithoutDistortion(100000, 100000, (int)Iw/2,(int)Ih/2);// camera usb in simulation
 
 //  vpCameraParameters cam(4011, 3927, (int)Iw/2, (int)Ih/2);//perspective camera with 30deg rotaion around x axis, focal length in Blender = 0.25mm
 
@@ -553,6 +618,12 @@ main(int argc, const char ** argv)
  // vpCameraParameters cam(8984549/scale, 8955094/scale, (int)Iw/2, (int)Ih/2);//160, 120 parallel
  // vpCameraParameters cam(12237, 12237, (int)Iw/2, (int)Ih/2);//perspective parameters are 12237, 12237 (focal length in Blender = 0.2mm) regularized by computed calibration VVS 101325, 101452,
   // 24813, 24792 for focal length in Blender = 0.6mm, so the regularized perspective parameters is 44708, 44670
+
+
+/*  //just compute laplacian of a sequence of images
+  std::string filepath = "/home/lcui/soft/nanorobust/Nanopositioning_Simulator/Image Sequence/IMAGES_PNG/frame";
+  computeLaplacian(filepath,600,pjModel,cam,Z);*/
+
 
   // display the image
 #if defined VISP_HAVE_X11
@@ -575,7 +646,6 @@ main(int argc, const char ** argv)
   }
 #endif
 
-
    vpColVector vm;//velocity to be sent for the init pose, in meter or specified unit
 /*   vpHomogeneousMatrix vmH;
 
@@ -595,19 +665,18 @@ main(int argc, const char ** argv)
    vm[5]=Rv[2];*/
 
   vm.resize(6);
-  vm[0]= 0.0002*scale;//velocity
- // vm[1]= 0.0002*scale;//velocity
-//  vm[2]= 0.001*scale;
-//  vm[3]=vpMath::rad(1);
- // vm[4]=vpMath::rad(1);
-//  vm[5]=vpMath::rad(-3);
+//  vm[0]= 0.0005*scale;//velocity
+ // vm[1]= 0.0005*scale;//velocity
+  vm[2]= -0.0005*scale;
+//  vm[3]=vpMath::rad(2);
+//  vm[4]=vpMath::rad(-2);
+//  vm[5]=vpMath::rad(-2);
 
    // vpHomogeneousMatrix wMe_tmp =  wMe * vpExponentialMap::direct(vm,1);
 
   //  cout << "wMe_tmp=\n" <<  wMe_tmp << endl;
 
-    cMe = cMe * vpExponentialMap::direct(vm,1);
-    wMe = wMc * cMe;
+    wMe = wMe * vpExponentialMap::direct(vm,1);
     cMo = cMw * wMe * eMo ;
 
     cout << "vpExponentialMap::direct(vm,1)=\n" << vpExponentialMap::direct(vm,1) << endl;
@@ -627,7 +696,7 @@ main(int argc, const char ** argv)
     if( remove( readFileFlag.c_str()) != 0 )
           perror( "Error deleting image file" );
 
-    vpTime::wait(100);
+    vpTime::wait(50);
 
     if(ifstream(filename_c))
     {
@@ -639,20 +708,12 @@ main(int argc, const char ** argv)
         perror( "current image dose not exist" );
 
     if(blur)
-        getBlurImage(I,I,cMo[2][3]);
+        getBlurImage(I,I,cMod[2][3],cMo[2][3]);
         cout << "cMo[2][3]=" << cMo[2][3] << endl;
     if (add_noise)
       getNoisedImage(I,I,noise_mean,noise_sdv);
-
-
-//  cMo.buildFrom(0.000000*scale,0.000000*scale,ZcMo,vpMath::rad(-5),vpMath::rad(5),vpMath::rad(5));
-
-/*
-  //set the robot at the desired position
-  sim.setCameraPosition(cMo);
-  I = 0 ;
-  sim.getImage(I,cam);  // and aquire the image I
-  */
+    if(denoise)
+        getFilteredImage(I,I);
 
   
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
@@ -716,6 +777,8 @@ main(int argc, const char ** argv)
   vpDisplayGTK ds;
 #endif
 
+ if(pjModel == parallelZ)
+ {
     vpImageConvert::convert(sI.imGxy,Idip);
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK)
   {
@@ -724,6 +787,7 @@ main(int argc, const char ** argv)
     vpDisplay::flush(Idip);
   }
 #endif
+ }
 
 
   // desired visual feature built from the image 
@@ -744,37 +808,36 @@ main(int argc, const char ** argv)
   vpMatrix H ; // Hessien utilise pour le levenberg-Marquartd
   vpColVector error ; // Erreur I-I*, photometric information
 
-  vpMatrix Lgsd; // interaction matrix (using image gradient) of the desired position
-  vpMatrix Hgsd; // hessien of the desired position (using image gradient)
-  vpMatrix Hg;  // Hessien for  levenberg-Marquartd (using image gradient)
-  vpColVector sg_error; // error sg-sg*, image gradient
+
 
   // Compute the interaction matrix
   // link the variation of image intensity to camera motion
-
   // here it is computed at the desired position
   sId.interaction(Lsd) ;
   cout << "Size of Lsd:" << Lsd.getRows() << "x" << Lsd.getCols() <<endl;
   //cout << "Lsd=\n" << Lsd <<endl;
 
+  vpMatrix Lgsd; // interaction matrix (using image gradient) of the desired position
+  vpMatrix Hgsd; // hessien of the desired position (using image gradient)
+  vpMatrix Hg;  // Hessien for  levenberg-Marquartd (using image gradient)
+  vpColVector sg_error; // error sg-sg*, image gradient
+
+
   Lgsd = sId.get_Lg();
   cout << "Size of Lgsd:" << Lgsd.getRows() << "x" << Lgsd.getCols() <<endl;
   //cout << "Lsd=\n" << Lsd <<endl;
 
-/*  vpVelocityTwistMatrix cVw;
-  cVw.buildFrom(cMw);
-  cout << "cVw=\n" << cVw <<endl;*/
 
-  vpVelocityTwistMatrix cVe; //cVo
-  cVe.buildFrom(cMe);
-  //cVo.buildFrom(cMo);
-//  cout << "cVo=\n" << cVo <<endl;
+
+  vpVelocityTwistMatrix cVw;
+  cVw.buildFrom(cMw);
+  cout << "cVw=\n" << cVw <<endl;
 
   vpMatrix Js;// visual feature Jacobian
   vpMatrix Jn;// robot Jacobian
   vpMatrix diagHsd;// diag(Hsd)
 
-  /*For parallelZ, image gradient*/
+  //For parallelZ, image gradient
   vpMatrix Jgs;// visual feature Jacobian
   vpMatrix Jgn;// robot Jacobian
   vpMatrix diagHgsd;// diag(Hsd)
@@ -788,7 +851,7 @@ main(int argc, const char ** argv)
       Jn[4][3]=1;
       Jn[5][4]=1;
 
-      Js=-Lsd*cVe*Jn;
+      Js=-Lsd*cVw*Jn;
       //cout << "Lsd*cVw=\n" << Lsd*cVw << endl;
 
       //cout << "Jn=\n" << Jn << endl;
@@ -801,7 +864,6 @@ main(int argc, const char ** argv)
       Hsd = Js.AtA() ;
 
       //cout << "Hsd=\n" << Hsd <<endl;
-
       // Compute the Hessian diagonal for the Levenberg-Marquartd
       // optimization process
       unsigned int n = 5 ;
@@ -818,13 +880,13 @@ main(int argc, const char ** argv)
       Jn[4][3]=1;
       Jn[5][4]=1;
 
-      Js=-Lsd*cVe*Jn;
+      Js=-Lsd*cVw*Jn;
       cout << "Size of Jn:" << Jn.getRows() << "x" << Jn.getCols() <<endl;
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
 
       Jgn.resize(6,1);
       Jgn[2][0]=1;
-      Jgs=-Lgsd*cVe*Jgn;
+      Jgs=-Lgsd*cVw*Jgn;
 
       cout << "Size of Jgn:" << Jgn.getRows() << "x" << Jgn.getCols() <<endl;
       cout << "Size of Jgs:" << Jgs.getRows() << "x" << Jgs.getCols() <<endl;
@@ -833,7 +895,6 @@ main(int argc, const char ** argv)
       Hsd = Js.AtA() ;
 
       Hgsd = Jgs.AtA();
-
       cout << "Hgsd=\n" << Hgsd <<endl;
 
       // Compute the Hessian diagonal for the Levenberg-Marquartd
@@ -846,17 +907,14 @@ main(int argc, const char ** argv)
       diagHgsd.resize(1,1);
       diagHsd[0][0] = Hsd[0][0];
 
-
-
   }
   else //perspective //or parallelZ
   {
       Jn.resize(6,6);
       Jn.setIdentity();
-      Js=-Lsd*cVe*Jn;
+      Js=-Lsd*cVw*Jn;
 
       cout << "Size of Js:" << Js.getRows() << "x" << Js.getCols() <<endl;
-
       //cout << "Js=\n" << Js <<endl;
 
       // Compute the Hessian H = L^TL
@@ -872,31 +930,6 @@ main(int argc, const char ** argv)
       for(unsigned int i = 0 ; i < n ; i++) diagHsd[i][i] = Hsd[i][i];
   }
 
-  // ------------------------------------------------------
-  // Control law
-  double lambda ; //gain
-  vpColVector e ;// velocity to be multiply by lamda
-  vpColVector v ; // camera velocity send to the robot
-  vpColVector eg; // velocity of z axis
-  vpColVector vg ; // camera velocity of z axis
-
-  // ----------------------------------------------------------
-  // Minimisation
-
-  double mu ;  // mu = 0 : Gauss Newton ; mu != 0  : LM
-  double lambdaGN;
-  double lambdaTZ  = 50;// gain for Translation on Z : lambdaTZ*lambda
-
-  mu       =  0.001;
-  lambda   = 10 ;
-  lambdaGN = 10;
-
-  // set a velocity control mode 
-  //robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL) ;
-
-  // ----------------------------------------------------------
-  int iter   = 0;
-  int iterGN = 90 ; // swicth to Gauss Newton after iterGN iterations
 
   vpPlot graphy(4, 600, 800, 1620, 1300, "Nanopositioning");
   vpPlot graphy2(2, 600, 400, 020, 1300, "Nanopositioning");
@@ -942,7 +975,6 @@ main(int argc, const char ** argv)
   strncpy( legend, "Rz", 40 );
   graphy.setLegend(1,2,legend);
   strncpy( legend, "Tx", 40 );
-
   graphy.setLegend(2,0,legend);
   strncpy( legend, "Ty", 40 );
   graphy.setLegend(2,1,legend);
@@ -955,20 +987,52 @@ main(int argc, const char ** argv)
   strncpy( legend, "Rz", 40 );
   graphy.setLegend(3,2,legend);
 
+  // ------------------------------------------------------
+  // Control law
+
+  vpColVector e ;// velocity to be multiply by lamda
+  vpColVector v ; // camera velocity send to the robot
+  vpColVector eg; // velocity of z axis
+  vpColVector vg ; // camera velocity of z axis
+
+  // ----------------------------------------------------------
+  // Minimisation
+
+  double mu,mu1,mu2,mu3 ;  // mu = 0 : Gauss Newton ; mu != 0  : LM
+  double lambdaTZ  = 50;// gain for Translation on Z : lambdaTZ*lambda
+  double lambda,lambda1, lambda2, lambda3 ; //gain
+
+  mu1       =  0.001;
+  mu2    =  0.001;
+  mu3    =  0.0004;
+  lambda1   =1;
+  lambda2 = 10;
+  lambda3   = 10;
+
+  mu = mu1;
+  lambda = lambda1;
+
+  // ----------------------------------------------------------
+  int iter   = 0;
+  int iter1 = 60 ; // swicth to Gauss Newton after iterGN iterations
+  int iter2 = 220 ;
+
   
   double normError = 1000; // norm error = |I-I*|
   double normError_p = 0; // previous norm error
-  double threshold=0.2;// condition of convergence
-  double convergence_threshold = 0.05;
+  double threshold=0.02;// condition of convergence
+  double convergence_threshold = 0.001;
 
   // For gaussian noise n~N(m,d^2), E=(I+n)-(I+n')=n-n',E~N(0,2*d^2)
-  if(add_noise && (nsModel == Gauss_dynamic))
+ /* if(add_noise && (nsModel == Gauss_dynamic))
       threshold += noise_sdv*1.414;
-
+*/
   cout<< "threshold=" << threshold << endl;
 
  // vpHomogeneousMatrix edMe,e/*dMw ;
   vpHomogeneousMatrix odMo ;
+
+  fileResidu <<"#projection model:" << pjModel << "\t init pose:" << vm.t() << "\t noise:" << add_noise << endl;
 
 /******************************* Here the loop begins ************************************/
   do
@@ -976,39 +1040,19 @@ main(int argc, const char ** argv)
 
     std::cout << "--------------------------------------------" << iter++ << std::endl ;
 
-    filecMo << iter;
-
     cMo = cMw * wMe * eMo;
 
-    //cout << "cMoT: " ;
-
+    filecMo << iter;
     for(int m=0;m<3;m++)
-    {
         filecMo << "\t" << cMo[m][3]*1e6; //convert m to um
-   //     cout << "\t" << cMo[m][3];
-    }
-
-    //cout << endl;
     filecMo << endl;
 
-    //Acquire the new image
-    //sim.setCameraPosition(cMo) ;
-    //sim.getImage(I,cam) ;
-
     // Acquir new image from blender
-
     if( remove( readFileFlag.c_str()) != 0 )
           perror( "Error deleting image file" );
-
-    vpTime::wait(100);
-
+    vpTime::wait(50);
     if(ifstream(filename_c))
-    {
         vpImageIo::read(I,filename) ;
-
-      //  if( remove( filename_c) != 0 )
-      //     perror( "Error deleting image file" );
-    }
     else
         perror( "current image dose not exist" );
 
@@ -1040,11 +1084,13 @@ main(int argc, const char ** argv)
     //cout<< "ZodMo=" << TodMo[2] << endl;
 
     if(blur)
-        getBlurImage(I,I,cMo[2][3]);
+        getBlurImage(I,I,cMod[2][3],cMo[2][3]);
 
     cout << "cMo[2][3]=" << cMo[2][3] << endl;
     if (add_noise && nsModel == Gauss_dynamic)
         getNoisedImage(I,I,noise_mean, noise_sdv);
+    if(denoise)
+        getFilteredImage(I,I);
 
 
 #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK) 
@@ -1062,9 +1108,14 @@ main(int argc, const char ** argv)
 #endif
 
     // Compute current visual feature
-    sI.buildFrom(I) ;
+    sI.buildFrom(I);
+    // compute current error
+    sI.error(sId,error);
 
-    int S_g=0; // image gradient
+    if (pjModel==parallelZ)
+    {
+
+    int S_g=0; // image laplacian
     vpColVector sg = sI.get_sg();
     int nbr_sg = sg.size();
     cout << "nbr_sg:" << nbr_sg << endl;
@@ -1073,23 +1124,16 @@ main(int argc, const char ** argv)
         S_g+= sg[m];
 
     fileSg << iter << "\t" << S_g << "\t" << cMod[2][3]-cMo[2][3] << endl;
-
-    // compute current error
-    sI.error(sId,error) ;
-
-    if (pjModel==parallelZ)
-        sI.sg_error(sId.get_sg(),sg_error) ;
+    sI.sg_error(sId.get_sg(),sg_error) ;
 
     vpImageConvert::convert(sI.imGxy,Idip);
-#if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK)
-  {
-    vpDisplay::display(Idip);
-    vpDisplay::flush(Idip);
-  }
-#endif
-
-    if(iter == 1)
-        vpImageIo::writePNG(Idiff,"../Result/img_init.png");
+    #if defined(VISP_HAVE_X11) || defined(VISP_HAVE_GDI) || defined(VISP_HAVE_GTK)
+      {
+        vpDisplay::display(Idip);
+        vpDisplay::flush(Idip);
+      }
+    #endif
+     }
 
     normError_p = normError;
 
@@ -1103,25 +1147,45 @@ main(int argc, const char ** argv)
     // double t = vpTime::measureTimeMs() ;
 
     // ---------- Levenberg Marquardt method --------------
+
+
+/*
+    if (iter < iter1)//
     {
-     /* if (normError<2+threshold)//iter > iterGN
-      {
-          cout << "LM method" << endl;
-        mu = 0.0001 ;
-        lambda = lambdaGN;
-      }*/
+        mu = mu1 ;
+        lambda = lambda1;
+    }
+    else if(iter < iter2)
+    {
+        mu = mu2 ;
+        lambda = lambda2;
+    }
+    else
+    {
+        mu = mu3 ;
+        lambda = lambda3;
+    }*/
+    if(iter == 1)
+    {
+        vpImageIo::writePNG(Idiff,"../Result/img_init.png");
+        fileResidu << "#\t mu:"<< mu << "\t lambda:" << lambda  << endl;
+    }
+    else if (iter == iter1 || iter == iter2)
+        fileResidu << "#\t mu:"<< mu << "\t lambda:" << lambda  << endl;
+
+
       // Compute the levenberg Marquartd term
-      {
-        H = ((mu * diagHsd) + Hsd).inverseByLU();
-      }
+      H = ((mu * diagHsd) + Hsd).inverseByLU();
       //	compute the control law
       e = H * Js.t() *error ;
 
-   //   vpMatrix Jp ;
-   //   int rank ;
-    //  rank = Js.pseudoInverse(Jp,1e-20) ;
-    //  cout << "rank " << rank << endl ;
-
+/*
+      vpMatrix Jp ;
+       int rank ;
+       rank = Js.pseudoInverse(Jp,1e-24) ;
+       cout << "rank " << rank << endl ;
+       e = Jp*error;
+*/
       v =  -lambda*e;
 
       if(pjModel==parallelZ)
@@ -1129,12 +1193,8 @@ main(int argc, const char ** argv)
           Hg = ((mu * diagHgsd) + Hgsd).inverseByLU();
           eg = Hg * Jgs.t() * sg_error ;
           vg =  -lambda*lambdaTZ*eg;
-
          // cout << "vg=" << vg << endl;
       }
-
-
-    }
 
     if(pjModel==parallel)
     {
@@ -1169,10 +1229,29 @@ main(int argc, const char ** argv)
         v[0]=0;//vc[0]
 */
     }
-
-    if (vpMath::equal(normError,normError_p, convergence_threshold*10) && iter > 200 && lambdaTZ < 1000)
+/*
+   if (iter < iter1)
     {
-        //lambdaTZ *= 2;
+        v[5]=0;
+        v[4]=0;//vc[3]
+        v[3]=0;//vc[2]
+        //v[2]=0;//vc[3]
+        v[1]=0;//vc[1]
+        v[0]=0;//vc[0]
+    }
+   else if (iter < iter2)
+   {
+       v[5]=0;
+       v[2]=0;
+       v[1]=0;//vc[1]
+       v[0]=0;//vc[0]
+   }
+
+*/
+
+    if (pjModel == parallelZ && vpMath::equal(normError,normError_p, convergence_threshold*10) && iter > 200 && lambdaTZ < 1000)
+    {
+        lambdaTZ *= 2;
         cout << "----------- Z begin moving --------------" << endl;
     }
 
@@ -1192,11 +1271,8 @@ main(int argc, const char ** argv)
     cout << "lambda = " << lambda << "  mu = " << mu ;
     cout << " |Tc| = " << sqrt(v.sumSquare()) << endl;
 
-    // send the robot velocity
-    //robot.setVelocity(vpRobot::CAMERA_FRAME, v) ;
-
     //cout << "cMo=\n" << cMo << endl;
-
+/*
     vpHomogeneousMatrix eV;
     vpThetaUVector vR;
     vR[0]=v[3]*MU;
@@ -1208,25 +1284,13 @@ main(int argc, const char ** argv)
     eV[1][3]=v[1]*MU;
     eV[2][3]=v[2]*MU;
 
-    cMe = cMe * eV;
+    cMe = cMe * eV;*/
 
-    //wMe = wMe * eV;
-
-    cout << "wMe1_current=\n" << wMe << endl;
-
-    wMe = wMc * cMe;
-
-    cout << "eV=\n" << eV << endl;
+    wMe = wMe * vpExponentialMap::direct(v,0.04);
 
     cout << "wMe2_current=\n" << wMe << endl;
 
     send_wMe(wMe,scale);
-
-    //cout << "eV=\n "<< eV << endl;
-
-    //cMo =  cMo * vpExponentialMap::direct(v,0.04);
-
-    //cout << "v ExpMap=\n" << vpExponentialMap::direct(v,0.04) << endl;
 
     cout << "cMo_new=\n" << cMo << endl;
 
@@ -1243,17 +1307,20 @@ main(int argc, const char ** argv)
     sprintf(img_filename_c, "../Result/video/img_diff_%d.png", iter);
     string img_filename_d(img_filename_c);
     vpImageIo::writePNG(Idiff,img_filename_d);
-    sprintf(img_filename_c, "../Result/video/img_gradient_%d.png", iter);
-    string img_filename_g(img_filename_c);
-    vpImageIo::writePNG(Idip,img_filename_g);
 
+    if(pjModel == parallelZ)
+    {
+        sprintf(img_filename_c, "../Result/video/img_gradient_%d.png", iter);
+        string img_filename_g(img_filename_c);
+        vpImageIo::writePNG(Idip,img_filename_g);
+    }
     /*-----------Here end to save the image for video---------*/
 
- //   if(iter > 1000)
- //       vpImageIo::writePNG(Idiff,"../Result/img_end.png");
+    if(iter > 1000)
+        vpImageIo::writePNG(Idiff,"../Result/img_end.png");
 
   }
- while(normError > threshold  && iter < opt_niter && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 1.5*threshold));
+ while(normError > threshold  && iter < opt_niter);// && !(vpMath::equal(normError,normError_p, convergence_threshold) && normError < 1.5*threshold));
 //while(1) ;
 
  vpImageIo::writePNG(Idiff,"../Result/img_end.png");
